@@ -4,7 +4,13 @@ import { ProtectedRoute } from './components/ProtectedRoute.tsx';
 import { AppShell } from './components/AppShell.tsx';
 import { SimulationBanner } from './components/SimulationBanner.tsx';
 import { LandingPlaceholder } from './routes/LandingPlaceholder.tsx';
-import { WorkbenchPlaceholder } from './routes/WorkbenchPlaceholder.tsx';
+import { Overview } from './routes/Overview.tsx';
+import { Consent } from './routes/Consent.tsx';
+import { Applicant } from './routes/Applicant.tsx';
+import { Score } from './routes/Score.tsx';
+import { Behavior } from './routes/Behavior.tsx';
+import { Fairness } from './routes/Fairness.tsx';
+import { Audit } from './routes/Audit.tsx';
 import { SignInRoute } from './routes/SignInRoute.tsx';
 import { SignUpRoute } from './routes/SignUpRoute.tsx';
 
@@ -41,34 +47,13 @@ export function App() {
         }
       >
         <Route index element={<Navigate to="/app/overview" replace />} />
-        <Route
-          path="overview"
-          element={<WorkbenchPlaceholder routeName="Overview" />}
-        />
-        <Route
-          path="consent"
-          element={<WorkbenchPlaceholder routeName="Consent" />}
-        />
-        <Route
-          path="applicant"
-          element={<WorkbenchPlaceholder routeName="Applicant" />}
-        />
-        <Route
-          path="score"
-          element={<WorkbenchPlaceholder routeName="Score" />}
-        />
-        <Route
-          path="behavior"
-          element={<WorkbenchPlaceholder routeName="Behavior" />}
-        />
-        <Route
-          path="fairness"
-          element={<WorkbenchPlaceholder routeName="Fairness" />}
-        />
-        <Route
-          path="audit"
-          element={<WorkbenchPlaceholder routeName="Audit" />}
-        />
+        <Route path="overview" element={<Overview />} />
+        <Route path="consent" element={<Consent />} />
+        <Route path="applicant" element={<Applicant />} />
+        <Route path="score" element={<Score />} />
+        <Route path="behavior" element={<Behavior />} />
+        <Route path="fairness" element={<Fairness />} />
+        <Route path="audit" element={<Audit />} />
       </Route>
 
       {/* Fallback */}
