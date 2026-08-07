@@ -1,0 +1,6 @@
+import { Link } from 'react-router-dom';
+import { Button } from '../components/ui/button.tsx';
+import { ApplicationRows } from './Overview.tsx';
+import { useApplications } from '../hooks/useApplications.tsx';
+
+export function Applications() { const { applications } = useApplications(); return <div className="mx-auto max-w-6xl space-y-10"><header className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--app-accent)]">Workspace</p><h1 className="mt-3 text-4xl font-semibold tracking-[-0.04em]">Applications</h1><p className="mt-3 text-[var(--app-muted)]">Application records and assessment states.</p></div><Link to="/app/applications/new"><Button>Apply for a loan</Button></Link></header>{applications.length ? <ApplicationRows applications={applications} /> : <div className="rounded-xl border border-dashed border-[var(--app-border)] bg-[var(--app-surface)] px-6 py-16 text-center"><h2 className="text-xl font-semibold">No applications yet</h2><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--app-muted)]">Create an application to begin the review workflow.</p><Link className="mt-6 inline-flex" to="/app/applications/new"><Button>Apply for a loan</Button></Link></div>}</div>; }

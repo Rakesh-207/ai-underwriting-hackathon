@@ -3,6 +3,20 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --app-bg: #f4f6f3;
+  --app-surface: #fcfdfb;
+  --app-wash: #edf2ed;
+  --app-ink: #18211d;
+  --app-muted: #66736b;
+  --app-border: #d9e1db;
+  --app-accent: #b45b2a;
+  --app-accent-soft: #f7e8dd;
+  --app-success: #28714f;
+  --app-warning: #9b671d;
+  --app-danger: #a64b45;
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
@@ -24,4 +38,8 @@
     outline-offset: 2px;
     border-radius: var(--radius-sm);
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }

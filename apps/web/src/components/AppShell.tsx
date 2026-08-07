@@ -1,88 +1,9 @@
-import type { ReactNode } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { useState, type ReactNode } from 'react';
+import { NavLink, Outlet } from 'react-router-dom';
 import { UserButton } from '@clerk/react';
-import { Badge } from './ui/badge.tsx';
-import { SimulationBanner } from './SimulationBanner.tsx';
 
-// Navigation order is fixed by the contract:
-// Overview | Consent | Applicant | Score | Behavior | Fairness | Audit
-// (companion spec 3.1, auth contract 6)
-const NAV_ITEMS: Array<{ to: string; label: string; description: string }> = [
-  { to: '/app/overview', label: 'Overview', description: 'Simulation dashboard' },
-  { to: '/app/consent', label: 'Consent', description: 'Purpose-bound consent' },
-  { to: '/app/applicant', label: 'Applicant', description: 'Baseline application data' },
-  { to: '/app/score', label: 'Score', description: 'Baseline vs dynamic result' },
-  { to: '/app/behavior', label: 'Behavior', description: 'Behavior update' },
-  { to: '/app/fairness', label: 'Fairness', description: 'Synthetic parity diagnostic' },
-  { to: '/app/audit', label: 'Audit', description: 'Trail, provenance, limitations' },
-];
+const NAV_ITEMS = [{ to: '/app/overview', label: 'Overview', description: 'Your application pulse' }, { to: '/app/applications', label: 'Applications', description: 'Application review queue' }];
+function ShellBrand() { return <div className="flex items-center gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-md bg-[var(--app-ink)] text-sm font-bold text-[var(--app-surface)]">L</div><div><p className="text-sm font-bold tracking-tight">Lattice Review</p><p className="text-[11px] text-[var(--app-muted)]">Underwriting workspace</p></div></div>; }
+function Navigation({ onNavigate }: { onNavigate?: () => void }) { return <nav aria-label="Application navigation" className="space-y-1">{NAV_ITEMS.map((item) => <NavLink key={item.to} to={item.to} onClick={onNavigate} className={({ isActive }) => ['group block rounded-lg px-3 py-3 transition-colors', isActive ? 'bg-[var(--app-accent-soft)] text-[var(--app-accent)]' : 'text-[var(--app-muted)] hover:bg-[var(--app-wash)] hover:text-[var(--app-ink)]'].join(' ')}><span className="block text-sm font-semibold">{item.label}</span><span className="mt-0.5 block text-xs opacity-75">{item.description}</span></NavLink>)}</nav>; }
 
-export function AppShell({ children }: { children?: ReactNode }) {
-  const location = useLocation();
-
-  return (
-    <div className="min-h-screen flex flex-col bg-bg">
-      <SimulationBanner />
-
-      {/* Header */}
-      <header className="border-b border-border bg-surface">
-        <div className="mx-auto flex max-w-[1200px] items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary text-primary-contrast">
-              <span className="text-sm font-semibold">UW</span>
-            </div>
-            <div>
-              <h1 className="text-md font-semibold text-ink leading-tight">
-                Underwriting Simulation Workbench
-              </h1>
-              <p className="text-xs text-muted leading-tight">
-                Lender-side decision-support simulation
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <Badge tone="neutral" className="hidden sm:inline-flex">
-              Synthetic demo
-            </Badge>
-            <UserButton />
-          </div>
-        </div>
-      </header>
-
-      {/* Body: left nav + main content */}
-      <div className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col gap-6 px-6 py-6 md:flex-row">
-        {/* Left navigation */}
-        <nav aria-label="Workbench navigation" className="md:w-60 md:shrink-0">
-          <ul className="flex gap-1 overflow-x-auto pb-2 md:flex-col md:overflow-visible md:pb-0">
-            {NAV_ITEMS.map((item) => {
-              const active = location.pathname === item.to;
-              return (
-                <li key={item.to} className="shrink-0 md:shrink">
-                  <NavLink
-                    to={item.to}
-                    className={[
-                      'block rounded-md px-3 py-2 text-sm transition-colors',
-                      active
-                        ? 'bg-primary/10 text-primary font-medium'
-                        : 'text-ink/80 hover:bg-bg hover:text-ink',
-                    ].join(' ')}
-                  >
-                    <span className="block">{item.label}</span>
-                    <span className="hidden text-xs text-muted md:block">
-                      {item.description}
-                    </span>
-                  </NavLink>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-
-        {/* Main content */}
-        <main className="min-w-0 flex-1">
-          {children ?? <Outlet />}
-        </main>
-      </div>
-    </div>
-  );
-}
+export function AppShell({ children }: { children?: ReactNode }) { const [open, setOpen] = useState(false); return <div className="min-h-screen bg-[var(--app-bg)] text-[var(--app-ink)]"><div className="border-b border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-2 text-center text-[11px] font-medium tracking-wide text-[var(--app-muted)]">Illustrative demo using synthetic data. No real lending decision is made.</div><div className="mx-auto flex min-h-[calc(100vh-33px)] max-w-[1440px]"><aside className="hidden w-64 shrink-0 border-r border-[var(--app-border)] bg-[var(--app-surface)] px-6 py-7 lg:block"><ShellBrand /><div className="mt-12"><Navigation /></div><div className="mt-auto pt-12 text-xs leading-5 text-[var(--app-muted)]"><p className="font-semibold text-[var(--app-ink)]">Review workspace</p><p className="mt-1">Connector states are mocked locally for this flow.</p><div className="mt-6 flex items-center gap-3"><UserButton /><span>Account</span></div></div></aside>{open && <div className="fixed inset-0 z-20 bg-black/20 lg:hidden" onClick={() => setOpen(false)}><aside className="h-full w-72 bg-[var(--app-surface)] px-6 py-7" onClick={(event) => event.stopPropagation()}><ShellBrand /><div className="mt-12"><Navigation onNavigate={() => setOpen(false)} /></div><div className="mt-10 flex items-center gap-3 text-sm"><UserButton /><span>Account</span></div></aside></div>}<div className="min-w-0 flex-1"><header className="flex h-16 items-center justify-between border-b border-[var(--app-border)] bg-[var(--app-surface)] px-5 sm:px-8 lg:px-12"><button type="button" className="rounded-md border border-[var(--app-border)] px-3 py-2 text-xs font-semibold lg:hidden" aria-label="Open navigation" onClick={() => setOpen(true)}>Menu</button><div className="hidden text-sm font-semibold lg:block">Application review</div><div className="lg:hidden"><ShellBrand /></div><div className="flex items-center gap-3"><span className="hidden text-xs text-[var(--app-muted)] sm:block">Illustrative environment</span><div className="lg:hidden"><UserButton /></div></div></header><main className="px-5 py-8 sm:px-8 sm:py-10 lg:px-12 lg:py-14">{children ?? <Outlet />}</main></div></div></div>; }

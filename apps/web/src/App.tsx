@@ -5,15 +5,12 @@ import { AppShell } from './components/AppShell.tsx';
 import { SimulationBanner } from './components/SimulationBanner.tsx';
 import { Landing } from './features/marketing/Landing.tsx';
 import { Overview } from './routes/Overview.tsx';
-import { Consent } from './routes/Consent.tsx';
-import { Applicant } from './routes/Applicant.tsx';
-import { Score } from './routes/Score.tsx';
-import { Behavior } from './routes/Behavior.tsx';
-import { Fairness } from './routes/Fairness.tsx';
-import { Audit } from './routes/Audit.tsx';
+import { Applications } from './routes/Applications.tsx';
+import { NewApplication } from './routes/NewApplication.tsx';
+import { ApplicationDetail } from './routes/ApplicationDetail.tsx';
 import { SignInRoute } from './routes/SignInRoute.tsx';
 import { SignUpRoute } from './routes/SignUpRoute.tsx';
-import { SimulationProvider } from './hooks/useWorkspace.tsx';
+import { ApplicationsProvider } from './hooks/useApplications.tsx';
 
 function PublicLanding() {
   const { isLoaded, isSignedIn } = useAuth();
@@ -43,20 +40,17 @@ export function App() {
         path="/app"
         element={
           <ProtectedRoute>
-            <SimulationProvider>
+            <ApplicationsProvider>
               <AppShell />
-            </SimulationProvider>
+            </ApplicationsProvider>
           </ProtectedRoute>
         }
       >
         <Route index element={<Navigate to="/app/overview" replace />} />
         <Route path="overview" element={<Overview />} />
-        <Route path="consent" element={<Consent />} />
-        <Route path="applicant" element={<Applicant />} />
-        <Route path="score" element={<Score />} />
-        <Route path="behavior" element={<Behavior />} />
-        <Route path="fairness" element={<Fairness />} />
-        <Route path="audit" element={<Audit />} />
+        <Route path="applications" element={<Applications />} />
+        <Route path="applications/new" element={<NewApplication />} />
+        <Route path="applications/:id" element={<ApplicationDetail />} />
       </Route>
 
       {/* Fallback */}
