@@ -3,7 +3,7 @@ import { useAuth } from '@clerk/react';
 import { ProtectedRoute } from './components/ProtectedRoute.tsx';
 import { AppShell } from './components/AppShell.tsx';
 import { SimulationBanner } from './components/SimulationBanner.tsx';
-import { LandingPlaceholder } from './routes/LandingPlaceholder.tsx';
+import { Landing } from './routes/Landing.tsx';
 import { WorkbenchPlaceholder } from './routes/WorkbenchPlaceholder.tsx';
 import { SignInRoute } from './routes/SignInRoute.tsx';
 import { SignUpRoute } from './routes/SignUpRoute.tsx';
@@ -20,7 +20,7 @@ function PublicLanding() {
   if (isSignedIn) {
     return <Navigate to="/app" replace />;
   }
-  return <LandingPlaceholder />;
+  return <Landing />;
 }
 
 export function App() {
