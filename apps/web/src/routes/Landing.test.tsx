@@ -1,5 +1,4 @@
-import { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Landing } from './Landing.tsx';
 
@@ -18,19 +17,14 @@ vi.mock('@clerk/react', () => ({
 }));
 
 let container: HTMLDivElement;
-let root: Root;
 
-async function renderLanding() {
+function renderLanding() {
   container = document.createElement('div');
   document.body.appendChild(container);
-  root = createRoot(container);
-  await act(async () => {
-    root.render(<Landing />);
-  });
+  container.innerHTML = renderToStaticMarkup(<Landing />);
 }
 
 afterEach(() => {
-  act(() => root?.unmount());
   container?.remove();
   clerkState.isSignedIn = false;
   openSignIn.mockReset();
