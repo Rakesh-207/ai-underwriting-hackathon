@@ -1,5 +1,5 @@
 import { useAuth, useClerk } from '@clerk/react';
-import { Button } from '../ui/button.tsx';
+import { Button } from '../../components/ui/button.tsx';
 
 export function MarketingHeader() {
   const { isSignedIn } = useAuth();

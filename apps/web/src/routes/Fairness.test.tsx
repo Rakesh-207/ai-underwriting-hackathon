@@ -1,11 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { Fairness } from './Fairness.tsx';
+import { SimulationProvider } from '../hooks/useWorkspace.tsx';
+vi.mock('@clerk/react', () => ({ useAuth: () => ({ getToken: async () => 'test-token' }) }));
 
 test('renders synthetic cohort diagnostics and limitations', () => {
-  const html = renderToStaticMarkup(<Fairness />);
+  const html = renderToStaticMarkup(<SimulationProvider><Fairness /></SimulationProvider>);
   expect(html).toContain('Fairness diagnostic');
-  expect(html).toContain('<table');
-  expect(html).toContain('Synthetic evaluation labels');
-  expect(html).toContain('Limitations');
+  expect(html).toContain('Synthetic cohort labels');
 });

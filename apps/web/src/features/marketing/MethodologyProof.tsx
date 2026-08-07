@@ -1,5 +1,5 @@
-import { Badge } from '../ui/badge.tsx';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card.tsx';
+import { Badge } from '../../components/ui/badge.tsx';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card.tsx';
 
 const proofCards = [
   ['Contribution ledger', 'Baseline and alternative contribution stay visible instead of disappearing into one opaque output.', 'primary'],

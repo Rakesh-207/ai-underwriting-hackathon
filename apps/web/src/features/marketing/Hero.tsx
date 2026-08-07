@@ -1,6 +1,6 @@
 import { useAuth, useClerk } from '@clerk/react';
-import { Button } from '../ui/button.tsx';
-import { Badge } from '../ui/badge.tsx';
+import { Button } from '../../components/ui/button.tsx';
+import { Badge } from '../../components/ui/badge.tsx';
 
 export function Hero() {
   const { isSignedIn } = useAuth();

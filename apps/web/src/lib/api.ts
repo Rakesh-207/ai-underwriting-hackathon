@@ -1,6 +1,13 @@
 import type {
+  ApplicantsResponse,
+  AuditEvent,
+  BehaviorUpdate,
+  ConsentPurpose,
+  ConsentResponse,
+  FairnessReport,
   ErrorEnvelope,
   HealthResponse,
+  ScoreResult,
 } from '@underwriting/shared';
 
 function getApiBaseUrl(): string {
@@ -20,6 +27,28 @@ export type TokenGetter = () => Promise<string | null>;
 
 export interface ApiClientOptions {
   getToken: TokenGetter;
+}
+
+export interface ConsentInput {
+  simulationId: string;
+  applicantId: string;
+  purposes: ConsentPurpose[];
+  categories: string[];
+  source: 'synthetic_fixture' | 'consented_manual_entry';
+}
+
+export interface ScoreInput {
+  simulationId: string;
+  applicantId: string;
+  mode: 'baseline_only' | 'consented_dynamic';
+}
+
+export interface BehaviorInput {
+  simulationId: string;
+  applicantId: string;
+  consentId: string;
+  eventType: BehaviorUpdate['eventType'];
+  value: number;
 }
 
 export class ApiError extends Error {
@@ -64,11 +93,59 @@ export function createApiClient(opts: ApiClientOptions) {
     return res;
   }
 
+  async function jsonRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const res = await authedFetch(path, init);
+    if (!res.ok) {
+      throw new ApiError(res.status, null, `API request failed (${res.status}).`);
+    }
+    return (await res.json()) as T;
+  }
+
   return {
     // Public health check — no token required.
     async getHealth(): Promise<HealthResponse> {
       const res = await fetch(`${getApiBaseUrl()}/api/health`);
       return (await res.json()) as HealthResponse;
+    },
+
+    async getApplicants(): Promise<ApplicantsResponse> {
+      return jsonRequest<ApplicantsResponse>('/api/demo/applicants');
+    },
+
+    async createConsent(input: ConsentInput): Promise<ConsentResponse> {
+      return jsonRequest<ConsentResponse>('/api/consent', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
+    },
+
+    async revokeConsent(consentId: string): Promise<ConsentResponse> {
+      return jsonRequest<ConsentResponse>(`/api/consent/${consentId}/revoke`, { method: 'POST' });
+    },
+
+    async getScore(input: ScoreInput): Promise<{ result: ScoreResult }> {
+      return jsonRequest<{ result: ScoreResult }>('/api/score', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
+    },
+
+    async applyBehavior(input: BehaviorInput): Promise<{ result: ScoreResult; update: BehaviorUpdate }> {
+      return jsonRequest<{ result: ScoreResult; update: BehaviorUpdate }>('/api/behavior', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
+    },
+
+    async getFairness(input: { simulationId: string }): Promise<{ report: FairnessReport }> {
+      return jsonRequest<{ report: FairnessReport }>('/api/fairness', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
+    },
+
+    async getAudit(simulationId: string): Promise<{ events: AuditEvent[] }> {
+      return jsonRequest<{ events: AuditEvent[] }>(`/api/audit/${simulationId}`);
     },
 
     // Generic protected request helper.

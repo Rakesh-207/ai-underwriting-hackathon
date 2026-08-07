@@ -7,7 +7,7 @@ vi.mock('@clerk/backend', () => ({
 import app from '../src/index.ts';
 import type { Env } from '../src/env.ts';
 
-const env: Env = { CLERK_SECRET_KEY: 'test-placeholder' };
+const env: Env = { CLERK_SECRET_KEY: 'test-placeholder', CLERK_AUTHORIZED_PARTIES: 'https://app.example.com,http://localhost:5173' };
 const auth = { authorization: 'Bearer valid-test-token' };
 
 async function request(path: string, init: RequestInit = {}) {

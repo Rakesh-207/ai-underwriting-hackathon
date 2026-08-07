@@ -7,7 +7,7 @@ vi.mock('@clerk/backend', () => ({
 import app from '../src/index.ts';
 import type { Env } from '../src/env.ts';
 
-const env: Env = { CLERK_SECRET_KEY: 'test-placeholder' };
+const env: Env = { CLERK_SECRET_KEY: 'test-placeholder', CLERK_AUTHORIZED_PARTIES: 'https://app.example.com,http://localhost:5173' };
 
 describe('request validation', () => {
   it('returns field errors for an incomplete consent body', async () => {

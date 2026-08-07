@@ -81,4 +81,33 @@ describe('createApiClient', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it('exposes server-owned simulation operations through the authenticated boundary', async () => {
+    const calls: Array<{ path: string; body?: string }> = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ path: String(input), body: init?.body as string | undefined });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }) as typeof globalThis.fetch;
+
+    try {
+      const client = createApiClient({ getToken: async () => TOKEN });
+      await client.getApplicants();
+      await client.createConsent({ simulationId: 'sim-1', applicantId: 'app-hero', purposes: ['application_baseline'], categories: ['bureau'], source: 'synthetic_fixture' });
+      await client.getScore({ simulationId: 'sim-1', applicantId: 'app-hero', mode: 'baseline_only' });
+      await client.applyBehavior({ simulationId: 'sim-1', applicantId: 'app-hero', consentId: 'con-1', eventType: 'income_observation', value: 0.9 });
+      await client.getFairness({ simulationId: 'sim-1' });
+      await client.getAudit('sim-1');
+      expect(calls.map((call) => call.path)).toEqual([
+        'http://localhost:8787/api/demo/applicants',
+        'http://localhost:8787/api/consent',
+        'http://localhost:8787/api/score',
+        'http://localhost:8787/api/behavior',
+        'http://localhost:8787/api/fairness',
+        'http://localhost:8787/api/audit/sim-1',
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

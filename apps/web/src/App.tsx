@@ -3,7 +3,7 @@ import { useAuth } from '@clerk/react';
 import { ProtectedRoute } from './components/ProtectedRoute.tsx';
 import { AppShell } from './components/AppShell.tsx';
 import { SimulationBanner } from './components/SimulationBanner.tsx';
-import { Landing } from './routes/Landing.tsx';
+import { Landing } from './features/marketing/Landing.tsx';
 import { Overview } from './routes/Overview.tsx';
 import { Consent } from './routes/Consent.tsx';
 import { Applicant } from './routes/Applicant.tsx';
@@ -13,6 +13,7 @@ import { Fairness } from './routes/Fairness.tsx';
 import { Audit } from './routes/Audit.tsx';
 import { SignInRoute } from './routes/SignInRoute.tsx';
 import { SignUpRoute } from './routes/SignUpRoute.tsx';
+import { SimulationProvider } from './hooks/useWorkspace.tsx';
 
 function PublicLanding() {
   const { isLoaded, isSignedIn } = useAuth();
@@ -42,7 +43,9 @@ export function App() {
         path="/app"
         element={
           <ProtectedRoute>
-            <AppShell />
+            <SimulationProvider>
+              <AppShell />
+            </SimulationProvider>
           </ProtectedRoute>
         }
       >

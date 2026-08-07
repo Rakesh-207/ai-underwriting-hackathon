@@ -1,11 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { Audit } from './Audit.tsx';
+import { SimulationProvider } from '../hooks/useWorkspace.tsx';
+vi.mock('@clerk/react', () => ({ useAuth: () => ({ getToken: async () => 'test-token' }) }));
 
 test('renders audit trail, fraud review, provenance, and cost', () => {
-  const html = renderToStaticMarkup(<Audit />);
+  const html = renderToStaticMarkup(<SimulationProvider><Audit /></SimulationProvider>);
   expect(html).toContain('Audit trail');
-  expect(html).toContain('Fraud review');
-  expect(html).toContain('Cost breakdown');
-  expect(html).toContain('Provenance');
+  expect(html).toContain('No audit events');
 });

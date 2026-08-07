@@ -53,7 +53,7 @@ describe('Clerk verifier boundary', () => {
 
     const response = await request();
 
-    expect(response.status).toBe(501);
+    expect(response.status).toBe(400);
     expect(verifyTokenMock).toHaveBeenCalledWith('fixture-token', {
       jwtKey: undefined,
       secretKey: fixtureEnv.CLERK_SECRET_KEY,
@@ -95,7 +95,7 @@ describe('Clerk verifier boundary', () => {
       JSON.stringify({ clerkUserId: 'forged_user' }),
     );
 
-    expect(response.status).toBe(501);
+    expect(response.status).toBe(400);
     expect(verifyTokenMock).toHaveBeenCalledWith(
       'fixture-token',
       expect.objectContaining({

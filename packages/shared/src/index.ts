@@ -253,6 +253,9 @@ export interface ApplicantsResponse {
     displayName: string;
     fixtureId: string;
     source: DataSource;
+    baseline: ApplicantBaseline;
+    alternative: ApplicantAlternative | null;
+    provenance: ProvenanceRecord[];
   }>;
   generatedAt: string;
 }

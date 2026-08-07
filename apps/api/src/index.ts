@@ -60,7 +60,7 @@ protectedApi.get('/api/demo/applicants', (c) => {
   const ownedApplicantIds = new Set(repository.listSimulations().filter((simulation) => simulation.clerkUserId === principal && repository.listConsents(simulation.simulationId).some((receipt) => receipt.status === 'granted')).map((simulation) => simulation.applicantId));
   const applicants = repository.listApplicants().filter((applicant) => ownedApplicantIds.has(applicant.applicantId));
   if (applicants.length === 0) return errorResponse('CONSENT_REQUIRED', 'Consent is required before applicant data is available.', generateRequestId(), 403);
-  return c.json({ schemaVersion: API_SCHEMA_VERSION, applicants: applicants.map((item) => ({ applicantId: item.applicantId, displayName: item.displayName, fixtureId: item.applicantId, source: 'synthetic_fixture' as const })), generatedAt: new Date().toISOString() });
+  return c.json({ schemaVersion: API_SCHEMA_VERSION, applicants: applicants.map((item) => ({ applicantId: item.applicantId, displayName: item.displayName, fixtureId: item.applicantId, source: 'synthetic_fixture' as const, baseline: item.baseline, alternative: item.alternative, provenance: item.provenance })), generatedAt: new Date().toISOString() });
 });
 
 protectedApi.post('/api/consent', async (c) => {
