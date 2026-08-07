@@ -134,7 +134,7 @@ Do not store email, display name, access token, raw JWT, or Clerk private metada
 
 ## 3. API Route Authentication Changes
 
-The companion spec lists eight routes (`vertical-slice-design.md:308`). This contract adds auth, consent, and ownership prerequisites to each. The shared `ErrorEnvelope` gains an `UNAUTHORIZED` code and the schema version is bumped to `"1.1"`.
+The companion spec lists eight routes (`vertical-slice-design.md:308`). This contract adds auth, consent, and ownership prerequisites to each. The shared response schema version is bumped to `"1.1"`, and this version applies to **all** API responses in this contract (success and error envelopes alike), not just auth failures. The companion spec's `"1.0"` version continues to govern its own pre-auth contract surfaces.
 
 ### 3.1 Route auth matrix
 
@@ -151,7 +151,7 @@ The companion spec lists eight routes (`vertical-slice-design.md:308`). This con
 
 ### 3.2 401 response shape
 
-The shared `ErrorEnvelope` (companion spec `vertical-slice-design.md:468-474`) is extended with `UNAUTHORIZED` and `FORBIDDEN` codes, and the response schema version is bumped to `"1.1"`.
+The shared `ErrorEnvelope` (companion spec `vertical-slice-design.md:468-474`) is extended with `UNAUTHORIZED` and `FORBIDDEN` codes. The response schema version `"1.1"` applies to **all** responses under this contract — every success body, error envelope, and streaming event emitted by an authenticated route carries `schemaVersion: "1.1"`. It is not scoped to 401/auth errors only.
 
 ```typescript
 interface ErrorEnvelope {
@@ -290,7 +290,7 @@ Streaming remains **optional** and **display-only** (explanation panel only), as
 | Event | Payload | Notes |
 |-------|---------|-------|
 | `explanation.started` | `{schemaVersion, simulationId, requestId}` | Stream begins. |
-| `explanation.token` | `{schemaVersion, simulationId, requestId, token}` | One text token. |
+| `explanation.token` | `{schemaVersion, simulationId, requestId, textChunk}` | One text chunk. The payload field is `textChunk` (never `token`, to avoid collision with auth tokens). |
 | `explanation.completed` | `{schemaVersion, simulationId, requestId}` | Stream finished. |
 | `explanation.error` | `{schemaVersion, simulationId, requestId, errorCode, message}` | Stream failed. |
 | `stream.closed` | `{schemaVersion, simulationId, requestId}` | Connection closed. |
