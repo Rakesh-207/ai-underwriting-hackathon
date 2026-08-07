@@ -9,7 +9,10 @@ import { MarketingFooter } from './MarketingFooter.tsx';
 
 export function Landing() {
   return (
-    <div className="min-h-screen bg-bg">
+    <div className="min-h-screen overflow-hidden bg-bg text-ink">
+      <div className="border-b border-border bg-surface px-5 py-2 text-center text-[11px] font-medium tracking-wide text-muted">
+        Illustrative demo using synthetic data. No real lending decision is made.
+      </div>
       <MarketingHeader />
       <main>
         <Hero />

@@ -36,14 +36,14 @@ describe('Landing', () => {
     await renderLanding();
 
     expect(container.querySelector('h1')?.textContent).toContain(
-      'See the evidence behind a changing underwriting picture',
+      'Underwriting that sees the full picture',
     );
   });
 
   it('shows a signed-out simulation CTA', async () => {
     await renderLanding();
 
-    expect(container.textContent).toContain('Start a Simulation');
+    expect(container.textContent).toContain('Explore the simulation');
   });
 
   it('shows the signed-in workbench CTA', async () => {
@@ -72,7 +72,7 @@ describe('Landing', () => {
     const sectionIds = [
       'hero',
       'trust-strip',
-      'how-it-works',
+      'story',
       'methodology',
       'safety',
       'marketing-cta',
@@ -87,7 +87,7 @@ describe('Landing', () => {
   it('avoids fake metrics, customer logos, and compliance badges', async () => {
     await renderLanding();
 
-    expect(container.textContent).not.toMatch(/\d+%|Acme|SOC 2|ISO 27001/i);
+    expect(container.textContent).not.toMatch(/\d+%|Acme|SOC 2|ISO 27001|next generation|seamless|revolutionary/i);
   });
 
   it('uses one h1 followed by section h2 headings', async () => {
