@@ -20,7 +20,10 @@ export function computeScore(request: ScoreRequest, generatedAt = '2026-01-01T00
   const alternative = request.applicant.alternative;
   const altInputs = alternative ? [alternative.cashflowStability, alternative.incomeConsistency, Math.min(1, alternative.savingsBufferMonths / 6), alternative.onTimePaymentRate] : [0, 0, 0, 0];
   const alternativeContribution = alternativeConsent && alternative ? clamp(150 * altInputs.reduce((sum, value, index) => sum + value * alternativeFeatures[index].weight, 0), 0, 150) : 0;
-  const dynamicScore = clamp(baselineScore + alternativeContribution, 300, 900);
+  const behaviorContribution = request.mode === 'consented_dynamic'
+    ? clamp(request.behaviorUpdates.reduce((sum, update) => sum + Math.max(0, Math.min(1, update.value)) * 30, 0), 0, 90)
+    : 0;
+  const dynamicScore = clamp(baselineScore + alternativeContribution + behaviorContribution, 300, 900);
   const evidence: EvidenceItem[] = baselineFeatures.map((feature, index) => ({
     featureKey: feature.key,
     label: feature.label,
@@ -43,7 +46,18 @@ export function computeScore(request: ScoreRequest, generatedAt = '2026-01-01T00
     explanation: `${feature.label} contributed from structured consented synthetic evidence.`,
     provenanceRef: `alternative:${feature.key}`,
   }));
-  const scoreId = stableId(JSON.stringify({ request, baselineScore, alternativeContribution }));
+  if (behaviorContribution > 0) request.behaviorUpdates.forEach((update) => evidence.push({
+    featureKey: `behavior:${update.eventType}`,
+    label: `${update.eventType} observation`,
+    normalizedValue: Math.max(0, Math.min(1, update.value)),
+    signedPoints: Math.round(Math.max(0, Math.min(1, update.value)) * 30),
+    direction: update.value >= 0.5 ? 'supports' : 'reduces',
+    source: update.source,
+    consentId: update.consentId,
+    explanation: 'The consented synthetic behavior observation was evaluated by the deterministic scorecard.',
+    provenanceRef: `behavior:${update.updateId}`,
+  }));
+  const scoreId = stableId(JSON.stringify({ request, baselineScore, alternativeContribution, behaviorContribution }));
   return {
     schemaVersion: API_SCHEMA_VERSION,
     simulationId: request.simulationId,

@@ -187,6 +187,7 @@ export interface AuditEvent {
   eventId: string;
   simulationId: string;
   applicantId: string;
+  clerkUserId: string;
   eventType: 'consent' | 'score' | 'behavior_update' | 'fairness' | 'validation_failure';
   occurredAt: string;
   modelVersion: string | null;

@@ -117,6 +117,119 @@ describe('API simulation routes', () => {
     expect(behaviorBody.result.dynamicScore).toBeGreaterThan(dynamicBody.result.dynamicScore);
   });
 
+  it('requires application_baseline consent before baseline scoring', async () => {
+    const create = await request('/api/consent', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        simulationId: 'sim-purpose-only',
+        applicantId: 'app-review',
+        purposes: ['alternative_cashflow'],
+        categories: ['cashflow'],
+        source: 'synthetic_fixture',
+      }),
+    });
+    expect(create.status).toBe(201);
+    const score = await request('/api/score', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-purpose-only', applicantId: 'app-review', mode: 'baseline_only' }),
+    });
+    expect(score.status).toBe(403);
+    expect((await json<{ errorCode: string }>(score)).errorCode).toBe('CONSENT_REQUIRED');
+  });
+
+  it('denies mismatched applicant and consent resources', async () => {
+    const create = await request('/api/consent', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        simulationId: 'sim-binding',
+        applicantId: 'app-review',
+        purposes: ['application_baseline', 'behavior_updates'],
+        categories: ['bureau', 'salary'],
+        source: 'synthetic_fixture',
+      }),
+    });
+    const receipt = await json<{ receipt: { consentId: string } }>(create);
+    const score = await request('/api/score', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-binding', applicantId: 'app-hero', mode: 'baseline_only' }),
+    });
+    expect(score.status).toBe(403);
+
+    const behavior = await request('/api/behavior', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        simulationId: 'sim-binding', applicantId: 'app-hero', consentId: receipt.receipt.consentId,
+        eventType: 'payment_observation', value: 0.99,
+      }),
+    });
+    expect(behavior.status).toBe(403);
+  });
+
+  it('returns repeatable receipt hashes and verifies persisted receipts', async () => {
+    const payload = {
+      simulationId: 'sim-hash', applicantId: 'app-hero', purposes: ['application_baseline'],
+      categories: ['bureau'], source: 'synthetic_fixture',
+    };
+    const first = await request('/api/consent', {
+      method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    const firstBody = await json<{ receipt: { receiptHash: string; consentId: string; grantedAt: string } }>(first);
+    const second = await request('/api/consent', {
+      method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify({ ...payload, simulationId: 'sim-hash-2' }),
+    });
+    const secondBody = await json<{ receipt: { receiptHash: string } }>(second);
+    expect(firstBody.receipt.receiptHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(secondBody.receipt.receiptHash).not.toBe(firstBody.receipt.receiptHash);
+    const changed = await request('/api/consent', {
+      method: 'POST', headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ ...payload, simulationId: 'sim-hash-3', categories: ['bureau', 'salary'] }),
+    });
+    const changedBody = await json<{ receipt: { receiptHash: string } }>(changed);
+    expect(changedBody.receipt.receiptHash).not.toBe(firstBody.receipt.receiptHash);
+    expect(firstBody.receipt.consentId).toBeTruthy();
+    expect(firstBody.receipt.grantedAt).toBeTruthy();
+  });
+
+  it('returns a scorecard-derived behavior score with distinct bound audit events', async () => {
+    const create = await request('/api/consent', {
+      method: 'POST', headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-behavior-contract', applicantId: 'app-review', purposes: ['application_baseline', 'alternative_cashflow', 'behavior_updates'], categories: ['bureau', 'cashflow'], source: 'synthetic_fixture' }),
+    });
+    const receipt = await json<{ receipt: { consentId: string } }>(create);
+    const initial = await request('/api/score', {
+      method: 'POST', headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-behavior-contract', applicantId: 'app-review', mode: 'consented_dynamic' }),
+    });
+    const initialBody = await json<{ result: { scoreId: string; dynamicScore: number; evidence: unknown[]; auditEventId: string } }>(initial);
+    const behavior = await request('/api/behavior', {
+      method: 'POST', headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-behavior-contract', applicantId: 'app-review', consentId: receipt.receipt.consentId, eventType: 'payment_observation', value: 0.99 }),
+    });
+    const behaviorBody = await json<{ result: { scoreId: string; dynamicScore: number; evidence: unknown[]; auditEventId: string }; behaviorAuditEventId: string }>(behavior);
+    expect(behaviorBody.result.scoreId).not.toBe(initialBody.result.scoreId);
+    expect(behaviorBody.result.dynamicScore).toBeGreaterThan(initialBody.result.dynamicScore);
+    expect(behaviorBody.result.evidence.length).toBeGreaterThan(initialBody.result.evidence.length);
+    expect(behaviorBody.result.auditEventId).not.toBe(behaviorBody.behaviorAuditEventId);
+
+    const audit = await request('/api/audit/sim-behavior-contract', { headers: auth });
+    const auditBody = await json<{ events: Array<{ eventType: string; eventId: string; simulationId: string; applicantId: string; clerkUserId: string }> }>(audit);
+    const scoreEvent = auditBody.events.find((event) => event.eventId === behaviorBody.result.auditEventId);
+    const behaviorEvent = auditBody.events.find((event) => event.eventId === behaviorBody.behaviorAuditEventId);
+    expect(scoreEvent?.eventType).toBe('score');
+    expect(behaviorEvent?.eventType).toBe('behavior_update');
+    expect(scoreEvent?.simulationId).toBe('sim-behavior-contract');
+    expect(scoreEvent?.applicantId).toBe('app-review');
+    expect(behaviorEvent?.simulationId).toBe('sim-behavior-contract');
+    expect(behaviorEvent?.applicantId).toBe('app-review');
+    expect(scoreEvent?.clerkUserId).toBe('user-1');
+    expect(behaviorEvent?.clerkUserId).toBe('user-1');
+  });
+
   it('evaluates fairness and returns the owned audit trail', async () => {
     const fairness = await request('/api/fairness', {
       method: 'POST',
@@ -151,6 +264,23 @@ describe('API simulation routes', () => {
     const denied = await request(`/api/consent/${receipt.receipt.consentId}/revoke`, {
       method: 'POST',
       headers: auth,
+    });
+    expect(denied.status).toBe(403);
+  });
+
+  it('denies cross-user access to an owned simulation', async () => {
+    const created = await request('/api/consent', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-cross-user', applicantId: 'app-hero', purposes: ['application_baseline'], categories: ['bureau'], source: 'synthetic_fixture' }),
+    });
+    expect(created.status).toBe(201);
+    const { verifyToken } = await import('@clerk/backend');
+    vi.mocked(verifyToken).mockResolvedValueOnce({ sub: 'user-2' } as never);
+    const denied = await request('/api/score', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-cross-user', applicantId: 'app-hero', mode: 'baseline_only' }),
     });
     expect(denied.status).toBe(403);
   });
