@@ -1,0 +1,42 @@
+/* AI Underwriting Hackathon — Design Tokens
+ * Source: docs/superpowers/specs/2026-08-07-vertical-slice-design.md section 8.1
+ * These tokens are the single source of truth for colors, typography, spacing,
+ * and radii across the marketing landing surface and the protected workbench.
+ */
+
+:root {
+  /* Color */
+  --color-bg: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-ink: #172033;
+  --color-muted: #596579;
+  --color-border: #d9dee8;
+  --color-primary: #2457d6;
+  --color-primary-contrast: #ffffff;
+  --color-success: #19734a;
+  --color-warning: #9a5b00;
+  --color-danger: #b53a3a;
+  --color-info: #245b78;
+
+  /* Typography */
+  --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 2rem;
+
+  /* Spacing */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+
+  /* Radius */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+}
