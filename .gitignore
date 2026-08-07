@@ -8,6 +8,7 @@ dist/
 coverage/
 .DS_Store
 *.log
+*.tsbuildinfo
 
 # Local Cloudflare state and generated types
 worker-configuration.d.ts
