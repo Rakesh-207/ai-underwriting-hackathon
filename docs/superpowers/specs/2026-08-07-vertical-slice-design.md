@@ -112,6 +112,7 @@ Retention: demo session
 Revocation: you can revoke this consent at any time; the next simulation result will exclude the affected signal.
 No live account connection is requested or supported.
 Grant selected consent
+Revoke this consent
 ```
 
 Purposes shown as separate cards are `application_baseline`, `alternative_cashflow`, `behavior_updates`, and `fraud_screening`. Baseline use is disclosed even though baseline fields are fixture data. The alternative card names its categories and explains that the fixture contains derived values only.
@@ -198,7 +199,7 @@ Every screen has loading, error, empty, and success treatment; the global simula
 |---|---|---|---|---|
 | Landing | Fixture catalog skeleton | Catalog unavailable + retry | `No synthetic fixtures are available.` | Entry CTA and boundary copy |
 | Applicant | Applicant card skeleton | Applicant lookup error + selector | `Choose a synthetic applicant to begin.` | Baseline fields and provenance |
-| Consent | Purpose-card skeleton | Receipt error with request ID | No receipt: unchecked cards and explanation | Receipt IDs, granted purposes, next action |
+| Consent | Purpose-card skeleton | Receipt error with request ID | No receipt: unchecked cards and explanation | Receipt IDs, granted purposes, revoke action, next action |
 | Alternative fixture | Signal-card skeleton | Fixture mismatch/consent error | `No alternative fixture is selected; continue with a baseline-only result.` | Fixture version and consented signals |
 | Score | Score cards and ledger skeleton | Safe API error and retry | Baseline-only result is valid empty alternative state | Baseline/dynamic cards, band, delta, fraud review |
 | Evidence | Ledger skeleton | Evidence fetch error | `No scored alternative signals were used.` | Complete contribution ledger and explanations |
@@ -304,6 +305,8 @@ Use source-owned shadcn/ui primitives where they improve consistency: `Button`, 
 
 The public schema version is `1.0`. JSON examples use `schemaVersion: "1.0"`; timestamps are ISO 8601 UTC strings. IDs are opaque strings and examples are synthetic.
 
+Route inventory: `GET /api/health`, `GET /api/demo/applicants`, `POST /api/consent`, `POST /api/consent/:consentId/revoke`, `POST /api/score`, `POST /api/behavior`, `POST /api/fairness`, and `GET /api/audit/:simulationId`. Every route returns the shared `ErrorEnvelope` on validation or runtime failure.
+
 ```ts
 type SchemaVersion = '1.0';
 type DataSource = 'synthetic_fixture' | 'consented_manual_entry';
@@ -382,7 +385,7 @@ interface FraudReview {
   ruleVersion: string;
 }
 
-interface CostEstimate {
+interface CostBreakdown {
   modelComputeMs: number;
   dataAccess: 0;
   storageWrite: 0 | 1;
@@ -391,6 +394,10 @@ interface CostEstimate {
   estimatedAmount: number;
   basis: 'local_measurement' | 'runtime_estimate';
 }
+
+// The response property remains `costEstimate` for evaluator-facing clarity;
+// its canonical shared type is CostBreakdown.
+type CostEstimate = CostBreakdown;
 
 interface ScoreResult {
   schemaVersion: SchemaVersion;
@@ -409,7 +416,7 @@ interface ScoreResult {
   featureRegistryVersion: string;
   generatedAt: string;
   auditEventId: string;
-  costEstimate: CostEstimate;
+  costEstimate: CostBreakdown;
 }
 
 interface BehaviorUpdate {
@@ -421,6 +428,27 @@ interface BehaviorUpdate {
   observedAt: string;
   source: DataSource;
   consentId: string;
+}
+
+interface FairnessReport {
+  schemaVersion: SchemaVersion;
+  reportId: string;
+  simulationId: string;
+  datasetVersion: string;
+  modelVersion: string;
+  referenceCohort: string;
+  cohorts: Array<{
+    cohort: string;
+    sampleCount: number;
+    strongOrStableRate: number;
+    outcomeRate: number | null;
+    selectionRateRatio: number | null;
+    adverseImpactRatio: number | null;
+    sampleSizeWarning: string | null;
+  }>;
+  limitations: string[];
+  generatedAt: string;
+  auditEventId: string;
 }
 
 interface AuditEvent {
@@ -520,7 +548,48 @@ Response `201`:
 }
 ```
 
-### 10.4 `POST /api/score`
+### 10.4 `POST /api/consent/:consentId/revoke`
+
+Revocation is an explicit mutation, not a UI-only toggle. The Worker verifies that the receipt belongs to the supplied simulation and applicant, is currently `granted`, and is not already revoked; it then persists the same receipt with `status: "revoked"` and `revokedAt`, writes a `consent` audit event, and invalidates the receipt for all subsequent scores and behavior updates. Repeating the operation returns `409 CONFLICT` with the existing receipt state.
+
+Request:
+
+```json
+{
+  "schemaVersion": "1.0",
+  "simulationId": "sim-001",
+  "applicantId": "app-maya-001",
+  "reason": "user_withdrew_demo_consent"
+}
+```
+
+Response `200`:
+
+```json
+{
+  "schemaVersion": "1.0",
+  "receipt": {
+    "schemaVersion": "1.0",
+    "consentId": "con-001",
+    "simulationId": "sim-001",
+    "applicantId": "app-maya-001",
+    "purposes": ["application_baseline", "alternative_cashflow", "behavior_updates", "fraud_screening"],
+    "categories": ["baseline_application", "derived_cashflow", "synthetic_behavior"],
+    "source": "synthetic_fixture",
+    "status": "revoked",
+    "grantedAt": "2026-08-07T09:32:00.000Z",
+    "revokedAt": "2026-08-07T09:40:00.000Z",
+    "retention": "demo_session",
+    "receiptHash": "sha256:demo-receipt-001"
+  },
+  "auditEventId": "aud-004",
+  "generatedAt": "2026-08-07T09:40:00.000Z"
+}
+```
+
+After this response, the next `POST /api/score` must return a baseline-only result with `alternativeContribution: 0`, no receipt-backed alternative evidence, and provenance explaining that the signal was excluded because consent was revoked. A behavior update using `con-001` returns `CONSENT_REQUIRED`; revocation does not erase the audit record.
+
+### 10.5 `POST /api/score`
 
 Request:
 
@@ -617,7 +686,7 @@ Response `200`:
 
 Without a valid matching receipt, the same route returns `alternativeContribution: 0`, `mode` is effectively baseline-only, alternative evidence is absent, and provenance explicitly says no consented alternative signal was used. The API must reject a client that tries to claim dynamic mode while omitting required consent rather than silently accepting a mismatch.
 
-### 10.5 `POST /api/behavior`
+### 10.6 `POST /api/behavior`
 
 Request:
 
@@ -649,7 +718,46 @@ Response `200`:
 }
 ```
 
-### 10.6 `GET /api/audit/:simulationId`
+### 10.7 `POST /api/fairness`
+
+The fairness endpoint evaluates a fixed synthetic evaluation fixture. `evaluationCohort` is a test label and is not part of `ApplicantProfile` scoring inputs. The Worker returns a diagnostic report only; it does not infer protected traits or make a production fairness claim.
+
+Request:
+
+```json
+{
+  "schemaVersion": "1.0",
+  "simulationId": "sim-001",
+  "datasetVersion": "fairness-cohort-v1",
+  "referenceCohort": "cohort_alpha"
+}
+```
+
+Response `200`:
+
+```json
+{
+  "schemaVersion": "1.0",
+  "reportId": "fair-001",
+  "simulationId": "sim-001",
+  "datasetVersion": "fairness-cohort-v1",
+  "modelVersion": "scorecard-v1",
+  "referenceCohort": "cohort_alpha",
+  "cohorts": [
+    {"cohort": "cohort_alpha", "sampleCount": 40, "strongOrStableRate": 0.60, "outcomeRate": 0.55, "selectionRateRatio": 1.0, "adverseImpactRatio": 1.0, "sampleSizeWarning": null},
+    {"cohort": "cohort_beta", "sampleCount": 12, "strongOrStableRate": 0.50, "outcomeRate": 0.42, "selectionRateRatio": 0.83, "adverseImpactRatio": 0.76, "sampleSizeWarning": "Small synthetic cohort; interpret descriptively."}
+  ],
+  "limitations": [
+    "This is a synthetic parity diagnostic, not a legal conclusion.",
+    "Cohort labels are evaluation-only and are never model inputs.",
+    "Small synthetic cohorts do not establish production fairness, causality, or absence of proxy effects."
+  ],
+  "generatedAt": "2026-08-07T09:41:00.000Z",
+  "auditEventId": "aud-005"
+}
+```
+
+### 10.8 `GET /api/audit/:simulationId`
 
 Response `200`:
 
@@ -746,7 +854,7 @@ The explanation boundary is evidence-constrained: input is `ScoreResult.evidence
 - Deployment: Cloudflare credentials are optional for local development and required for Pages/Worker deployment. D1 is conditional on a verified binding/account and is not a prerequisite for the first local demo.
 - CORS: Worker permits the configured local origin and deployed Pages origin only; failures use `ErrorEnvelope`.
 - Release identity: health response reports service, repository mode, model version, schema version, and generation time without secret values.
-- Cost: `CostEstimate` reports measured/estimated model compute, zero external data access, storage write basis, and zero explanation cost for the deterministic first slice; it does not claim a provider invoice.
+- Cost: `ScoreResult.costEstimate` is the evaluator-facing field, typed as the canonical `CostBreakdown`; it reports measured/estimated model compute, zero external data access, storage write basis, and zero explanation cost for the deterministic first slice. It does not claim a provider invoice.
 
 ## 14. Acceptance criteria
 
@@ -763,12 +871,13 @@ The first deployed slice is accepted only when all criteria below are testable a
 9. Fairness destination renders synthetic parity diagnostic language and limitations; cohort labels are not sent as model features.
 10. Every required route returns JSON with `schemaVersion`, the documented status code, and the documented response shape; invalid requests return `ErrorEnvelope` and a request ID.
 11. A score request without valid alternative consent produces a visible baseline-only result with zero alternative contribution and an explicit provenance explanation.
-12. Revoking a receipt causes the next score to exclude affected alternative evidence and contribution; the audit trail records the mutation.
-13. Loading, error, empty, and success states exist for all eight screens; safe retry does not duplicate consent, behavior, or audit actions.
-14. Responsive checks pass at mobile, tablet, and desktop breakpoints with usable navigation, no horizontal overflow, and keyboard-visible focus.
-15. A copy scan finds no forbidden lending-outcome language in rendered UI strings or source-owned UI copy. The approved language includes simulation result, reliability score, risk band, manual review signal, alternative contribution, and consented signal.
-16. The first slice deploys and runs without OCR, RAG, Agents SDK, Durable Objects, Vectorize, Workers AI, LLM calls, or live data providers. Their absence is reported as an intentional scope boundary.
-17. A local run succeeds with no Cloudflare credentials using fixtures and the in-memory repository; a credentialed deployment, if performed, separately verifies Pages rendering, Worker health, score, behavior, and audit endpoints.
+12. `POST /api/consent/:consentId/revoke` marks a granted receipt revoked, records `revokedAt`, returns the updated receipt, and writes an audit event; repeating revocation returns `409 CONFLICT`.
+13. Revoking a receipt causes the next score to exclude affected alternative evidence and contribution, and a behavior update using that receipt returns `CONSENT_REQUIRED`; the audit trail retains the mutation.
+14. Loading, error, empty, and success states exist for all eight screens; safe retry does not duplicate consent, revocation, behavior, or audit actions.
+15. Responsive checks pass at mobile, tablet, and desktop breakpoints with usable navigation, no horizontal overflow, and keyboard-visible focus.
+16. A copy scan finds no forbidden lending-outcome language in rendered UI strings or source-owned UI copy. The approved language includes simulation result, reliability score, risk band, manual review signal, alternative contribution, and consented signal.
+17. The first slice deploys and runs without OCR, RAG, Agents SDK, Durable Objects, Vectorize, Workers AI, LLM calls, or live data providers. Their absence is reported as an intentional scope boundary.
+18. A local run succeeds with no Cloudflare credentials using fixtures and the in-memory repository; a credentialed deployment, if performed, separately verifies Pages rendering, Worker health, score, behavior, fairness, and audit endpoints.
 
 ## 15. Design decisions and exclusions
 
