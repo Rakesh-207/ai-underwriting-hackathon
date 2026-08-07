@@ -306,3 +306,5 @@ export interface StreamClosedEvent {
   simulationId: string;
   requestId: string;
 }
+
+export * from './alternative-data';
