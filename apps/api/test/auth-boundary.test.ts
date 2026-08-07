@@ -6,6 +6,7 @@ import type { Env } from '../src/env.ts';
 // forged tokens, and missing/malformed tokens never reach verification logic.
 const testEnv: Env = {
   CLERK_SECRET_KEY: 'test-secret-placeholder-not-a-real-key',
+  CLERK_AUTHORIZED_PARTIES: 'http://localhost:5173',
 };
 
 function request(path: string, init: RequestInit = {}): Response {

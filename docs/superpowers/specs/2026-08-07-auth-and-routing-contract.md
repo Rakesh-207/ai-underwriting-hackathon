@@ -48,9 +48,10 @@ These decisions are locked and drive every section below.
 ### 1.3 Worker authentication
 
 - Package: `@clerk/backend`, or the current supported Hono/Cloudflare-compatible Clerk verifier documented by Clerk at implementation time.
-- Server secret: `CLERK_SECRET_KEY` is a Worker server-side secret. It is stored in Wrangler/Cloudflare secret storage or local Worker secret injection. It must never appear in any `VITE_*` variable, the client bundle, logs, source maps, error payloads, fixture data, or source-owned UI.
+- Server secrets: `CLERK_SECRET_KEY` and optional `CLERK_JWT_KEY` are Worker-side secrets. `CLERK_JWT_KEY` is preferred for networkless verification; `CLERK_SECRET_KEY` is the fallback. They are stored in Wrangler/Cloudflare secret storage or local Worker secret injection and must never appear in any `VITE_*` variable, the client bundle, logs, source maps, error payloads, fixture data, or source-owned UI.
 - Runtime constraint: the chosen verifier must run inside the Cloudflare Workers runtime. It must not require a Node-only runtime or import `node:` modules that Workers reject. If the current `@clerk/backend` release is not Workers-compatible at implementation time, record the supported Hono/Cloudflare alternative in the implementation report before proceeding.
-- Verification scope: the middleware verifies signature, issuer, audience/authorized-party (as applicable), and expiry.
+- Authorized parties: `CLERK_AUTHORIZED_PARTIES` is a required server-side, comma-separated list of trimmed, exact frontend origins/authorized-party values for deployed operation. Empty values and `*` are invalid. Protected requests fail closed with a generic `500 INTERNAL_ERROR` configuration response when the list is absent or invalid; no secret or configuration value is disclosed.
+- Verification scope: the middleware verifies signature, issuer, audience/authorized-party (as applicable), and expiry, passing the configured exact allowlist to `verifyToken`.
 
 ### 1.4 Authenticated principal
 
@@ -188,7 +189,7 @@ Example `401` body (no token details disclosed):
 
 ### 3.3 Test coverage required
 
-Tests must cover: missing token, malformed token, expired token, wrong-issuer/audience token, valid token, and cross-user token. Tests must never print token or secret values.
+Tests must cover: missing token, malformed token, expired token, wrong-issuer/audience token, valid verified token with principal extraction, configured authorized-party propagation, absent/invalid production allowlist fail-closed behavior, forged token, and cross-user token. The deterministic verifier-path tests use a supported module mock because real Clerk credentials are unavailable in local CI; this is test evidence, not deployment proof. Tests must never print token or secret values.
 
 ### 3.4 Pre-consent boundary (decision 11)
 
@@ -340,7 +341,8 @@ The companion spec's `AppShell`/`NavRail` (`vertical-slice-design.md:49-56`) are
 - No `CLERK_SECRET_KEY` appears in any Vite variable.
 - A pre-consent test proves no application or alternative data is processed before a receipt exists.
 - Public landing and protected app route maps are documented.
-- Tests prove the 401 shape, token rejection, valid principal extraction, cross-user isolation, and server-derived identity. Tests never print token or secret values.
+- `CLERK_AUTHORIZED_PARTIES` is an exact, non-wildcard server allowlist; deployed protected requests fail closed when it is absent or invalid.
+- Tests prove the 401 shape, token rejection, valid mocked-verifier principal extraction, authorized-party propagation, cross-user isolation, and server-derived identity. Real Clerk credentials remain unavailable in local CI, so mocked verifier evidence is clearly separated from deployment proof. Tests never print token or secret values.
 
 ### 10.2 P1B — Vertical Slice Implementation
 
@@ -352,6 +354,7 @@ The companion spec's `AppShell`/`NavRail` (`vertical-slice-design.md:49-56`) are
 - Cross-user access is denied.
 - Missing, invalid, or revoked consent blocks score, behavior, explanation, and audit writes (except the required redacted validation/audit failure event).
 - The full consent-gated journey works end-to-end for the authenticated simulation owner.
+- Cross-user ownership and business-route behavior remain P1B responsibilities; P1A only establishes the verified principal boundary and protected route stubs.
 
 ### 10.3 P1C — Deployment Foundation
 

@@ -21,6 +21,17 @@ interface VerifyOpts {
   authorizedParties?: string[];
 }
 
+// Parse the server-only exact authorized-party allowlist. An absent, empty, or
+// wildcard value is invalid so deployed verification cannot silently weaken.
+export function parseAuthorizedParties(value?: string): string[] | null {
+  const parties = (value ?? '')
+    .split(',')
+    .map((party) => party.trim())
+    .filter(Boolean);
+  if (parties.length === 0 || parties.includes('*')) return null;
+  return parties;
+}
+
 // Verify a Clerk session token and return the authenticated principal (sub).
 // Uses @clerk/backend verifyToken with jwtKey for networkless verification
 // (Cloudflare Workers compatible). Returns null on any verification failure.
@@ -59,10 +70,22 @@ export const requireAuth = (): MiddlewareHandler<AppBindings> => {
       );
     }
 
+    const authorizedParties = parseAuthorizedParties(
+      c.env.CLERK_AUTHORIZED_PARTIES,
+    );
+    if (!authorizedParties) {
+      return errorResponse(
+        'INTERNAL_ERROR',
+        'Authentication is not configured for this service.',
+        requestId,
+        500,
+      );
+    }
+
     const principal = await verifyPrincipal(token, {
       jwtKey: c.env.CLERK_JWT_KEY,
       secretKey: c.env.CLERK_SECRET_KEY,
-      // authorizedParties may be configured from publishable key / deploy env.
+      authorizedParties,
     });
 
     if (!principal) {

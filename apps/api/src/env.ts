@@ -7,6 +7,10 @@ export interface Env {
   CLERK_SECRET_KEY: string;
   CLERK_JWT_KEY?: string;
   CLERK_PUBLISHABLE_KEY?: string;
+  // Comma-separated exact Clerk authorized-party values, normally the deployed
+  // frontend origin(s). Required for deployed auth hardening; wildcards are not
+  // accepted.
+  CLERK_AUTHORIZED_PARTIES?: string;
   // Allowed CORS origins (local dev + deployed Pages origin).
   ALLOWED_ORIGINS?: string;
 }
