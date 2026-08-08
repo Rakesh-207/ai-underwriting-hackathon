@@ -1,4 +1,5 @@
 import type { EvidenceItem, FairnessReport, RiskBand, ScoreResult } from '@underwriting/shared';
+import type { ApiApplication } from './api.ts';
 import { auditEvents, fairness, score } from './fixtures.ts';
 
 export type ProviderState = 'Not connected' | 'Consent required' | 'Connecting' | 'Connected' | 'Error';
@@ -11,11 +12,11 @@ export type ApplicationDraft = {
   requestedAmount: number; repaymentTenure: number; bureauScore: number; purpose: string; sources: SourceMap;
 };
 export type ApplicationReview = {
-  score: ScoreResult; fairness: FairnessReport; evidence: EvidenceItem[]; alternativeAvailable: boolean;
+  score: ScoreResult; fairness: FairnessReport | null; evidence: EvidenceItem[]; alternativeAvailable: boolean;
   explanation: string; timeline: Array<{ label: string; detail: string; time: string }>;
   sourceComparison: Array<{ label: string; baseline: string; alternative: string }>;
 };
-export type ApplicationRecord = { id: string; synthetic: true; example?: boolean; status: 'Draft' | 'Processing' | 'Reviewed' | 'Needs attention'; createdAt: string; updatedAt: string; draft: ApplicationDraft; review: ApplicationReview | null };
+export type ApplicationRecord = { id: string; synthetic: true; example?: boolean; status: 'Draft' | 'Processing' | 'Reviewed' | 'Needs attention'; createdAt: string; updatedAt: string; draft: ApplicationDraft; review: ApplicationReview | null; apiApplication?: ApiApplication };
 
 export const sourceCatalog: Array<{ key: DataSourceKey; name: string; provider: string; purpose: string; scope: string; optional: boolean }> = [
   { key: 'accountAggregator', name: 'Financial account data', provider: 'Mock Account Aggregator', purpose: 'Understand synthetic cash-flow consistency.', scope: 'Balances, income credits, recurring obligations', optional: true },

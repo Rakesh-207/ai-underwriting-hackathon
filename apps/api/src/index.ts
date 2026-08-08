@@ -17,6 +17,18 @@ import {
   type UnderwritingEngineInput,
   type UnderwritingScoreResult,
 } from '@underwriting/engine';
+import { createExplanationAdapter, type ExplanationInput, type ExplanationOutput } from '@underwriting/explanation-adapter';
+import { createSyntheticAuditCohorts, evaluateFairness } from '@underwriting/fairness-evaluation';
+import {
+  CloudflareAiSearchProvider,
+  createFallbackProvider,
+  createSanitizedQuery,
+  CURATED_CORPUS,
+  LocalRagProvider,
+  type RagChunk,
+  type RagProvider,
+  type RagTopic,
+} from '@underwriting/rag-retrieval';
 import { errorResponse, generateRequestId } from './errors.ts';
 import { requireAuth } from './auth.ts';
 import { cors } from './cors.ts';
@@ -233,6 +245,63 @@ async function ensureAccountAggregator(repo: SimulationRepository, simulation: S
   await repo.saveProvider(simulation.simulationId, 'account_aggregator', response);
 }
 
+function ragProvider(env: AppBindings['Bindings']): RagProvider {
+  const local = new LocalRagProvider(CURATED_CORPUS);
+  if (!env.AI_SEARCH) return local;
+  return createFallbackProvider(
+    new CloudflareAiSearchProvider({ AI_SEARCH: env.AI_SEARCH }, env.AI_SEARCH_INSTANCE),
+    local,
+  );
+}
+
+async function approvedRagChunks(env: AppBindings['Bindings'], score: ScoreResult, question: string): Promise<RagChunk[]> {
+  const query = createSanitizedQuery({
+    featureKeys: score.evidence.map((item) => item.featureKey),
+    anomalyTypes: score.fraudReview.flags.map((item) => item.ruleKey),
+    behaviorChangeCategories: ['behavior_updates'],
+    explanationQuestion: question,
+    allowedCorpusTopics: ['scoring', 'anomaly', 'limitations', 'consent', 'fairness'] satisfies RagTopic[],
+  });
+  const local = new LocalRagProvider(CURATED_CORPUS);
+  const result = await ragProvider(env).retrieve(query);
+  const approvedIds = new Set(CURATED_CORPUS.map((chunk) => chunk.chunkId));
+  const approved = result.chunks.filter((chunk) => approvedIds.has(chunk.chunkId));
+  return approved.length > 0 || result.provider === 'local' ? approved : (await local.retrieve(query)).chunks;
+}
+
+function explanationInput(score: ScoreResult, citationIds: string[]): ExplanationInput {
+  const magnitude = (points: number): 'low' | 'medium' | 'high' => Math.abs(points) >= 40 ? 'high' : Math.abs(points) >= 10 ? 'medium' : 'low';
+  const evidence = score.evidence.map((item) => ({
+    id: item.featureKey.replaceAll('-', '_'),
+    featureName: item.featureKey.replace(/[^A-Za-z0-9_]/g, '_').replace(/^[^a-z]+/i, 'feature_'),
+    direction: (item.direction === 'supports' ? 'positive' : item.direction === 'reduces' ? 'negative' : 'neutral') as 'positive' | 'negative' | 'neutral',
+    magnitude: magnitude(item.signedPoints),
+  }));
+  const anomalies = score.fraudReview.flags.map((item) => ({ id: item.ruleKey.replaceAll('-', '_'), severity: (item.severity === 'high' ? 'high' : item.severity === 'medium' ? 'medium' : 'low') as 'low' | 'medium' | 'high' }));
+  const riskBand = score.riskBand === 'strong' ? 'strong' : score.riskBand === 'stable' ? 'moderate' : score.riskBand === 'watch' ? 'watch' : 'high_attention';
+  return {
+    score: score.dynamicScore,
+    riskBand,
+    evidence,
+    anomalies,
+    behaviorScoreChange: { direction: 'unchanged', magnitude: 'low' },
+    limitations: ['insufficient_signals'],
+    citationIds,
+  };
+}
+
+async function explainSimulation(env: AppBindings['Bindings'], score: ScoreResult, question: string): Promise<ExplanationOutput> {
+  const chunks = await approvedRagChunks(env, score, question);
+  const citationIds = chunks.map((chunk) => chunk.chunkId);
+  const adapter = createExplanationAdapter({
+    baseUrl: env.VPS_LFM_BASE_URL ?? '',
+    apiKey: env.VPS_LFM_API_KEY,
+    model: env.VPS_LFM_MODEL,
+    approvedCitationIds: new Set(CURATED_CORPUS.map((chunk) => chunk.chunkId)),
+  });
+  return adapter.explain(explanationInput(score, citationIds));
+}
+
 protectedApi.get('/api/applications', async (c) => {
   const repo = repositoryFor(c.env);
   const principal = c.get('principal')!.clerkUserId;
@@ -268,6 +337,7 @@ protectedApi.get('/api/applications/:simulationId', async (c) => {
   const repo = repositoryFor(c.env);
   const simulation = await ownedSimulation(repo, c.req.param('simulationId'), c.get('principal')!.clerkUserId);
   if (!simulation) return forbidden();
+  if (!(await receiptsAreValid(repo, simulation.simulationId))) return errorResponse('CONFLICT', 'Persisted consent receipt could not be verified.', generateRequestId(), 409);
   return c.json({ schemaVersion: API_SCHEMA_VERSION, application: simulation, generatedAt: new Date().toISOString() });
 });
 
@@ -275,7 +345,7 @@ protectedApi.get('/api/demo/applicants', async (c) => {
   const repo = repositoryFor(c.env);
   const principal = c.get('principal')!.clerkUserId;
   const simulations = (await repo.listSimulations()).filter((simulation) => simulation.clerkUserId === principal);
-  const ownedApplicantIds = new Set((await Promise.all(simulations.map(async (simulation) => (await repo.listConsents(simulation.simulationId)).some((receipt) => receipt.status === 'granted')))).flatMap((hasConsent, index) => hasConsent ? [simulations[index].applicantId] : []));
+  const ownedApplicantIds = new Set((await Promise.all(simulations.map(async (simulation) => (await receiptsAreValid(repo, simulation.simulationId)) && (await repo.listConsents(simulation.simulationId)).some((receipt) => receipt.status === 'granted')))).flatMap((hasConsent, index) => hasConsent ? [simulations[index].applicantId] : []));
   const applicants = repo.listApplicants().filter((applicant) => ownedApplicantIds.has(applicant.applicantId));
   if (applicants.length === 0) return errorResponse('CONSENT_REQUIRED', 'Consent is required before applicant data is available.', generateRequestId(), 403);
   return c.json({ schemaVersion: API_SCHEMA_VERSION, applicants: applicants.map((item) => ({ applicantId: item.applicantId, displayName: item.displayName, fixtureId: item.applicantId, source: 'synthetic_fixture' as const, baseline: item.baseline, alternative: item.alternative, provenance: item.provenance })), generatedAt: new Date().toISOString() });
@@ -287,6 +357,7 @@ protectedApi.get('/api/consent', async (c) => {
   const simulationId = c.req.query('simulationId');
   if (!simulationId) return validationFailure(repo, c, 'unknown', principal);
   if (!(await ownedSimulation(repo, simulationId, principal))) return forbidden();
+  if (!(await receiptsAreValid(repo, simulationId))) return errorResponse('CONFLICT', 'Persisted consent receipt could not be verified.', generateRequestId(), 409);
   return c.json({ schemaVersion: API_SCHEMA_VERSION, receipts: await repo.listConsents(simulationId), generatedAt: new Date().toISOString() });
 });
 
@@ -337,6 +408,7 @@ protectedApi.get('/api/providers', async (c) => {
   if (!simulationId) return validationFailure(repo, c, 'unknown', principal);
   const simulation = await ownedSimulation(repo, simulationId, principal);
   if (!simulation) return forbidden();
+  if (!(await receiptsAreValid(repo, simulationId))) return errorResponse('CONFLICT', 'Persisted consent receipt could not be verified.', generateRequestId(), 409);
   const sources: ProviderSource[] = ['account_aggregator', 'digilocker_employment', 'digilocker_education'];
   return c.json({ schemaVersion: API_SCHEMA_VERSION, providers: sources.map((source) => ({ source, connected: Boolean(simulation.providers[source]), provenance: simulation.providers[source]?.provenance ?? null })), generatedAt: new Date().toISOString() });
 });
@@ -352,7 +424,8 @@ protectedApi.post('/api/providers/:source/connect', async (c) => {
   const source = c.req.param('source') as ProviderSource;
   if (!simulationId || !simulation || !consentId || !consent || consent.clerkUserId !== principal || consent.simulationId !== simulationId || consent.status !== 'granted' || !(await verifyReceiptHash(consent))) return errorResponse('CONSENT_REQUIRED', 'Provider consent is required.', generateRequestId(), 403);
   if (!['account_aggregator', 'digilocker_employment', 'digilocker_education'].includes(source)) return errorResponse('NOT_FOUND', 'Provider not found.', generateRequestId(), 404);
-  const receipts = [consent];
+  if (!(await receiptsAreValid(repo, simulationId))) return errorResponse('CONFLICT', 'Persisted consent receipt could not be verified.', generateRequestId(), 409);
+  const receipts = await repo.listConsents(simulationId);
   if (!sourceConsent(receipts, source)) return errorResponse('CONSENT_REQUIRED', 'Provider consent is required.', generateRequestId(), 403);
   if (source === 'account_aggregator') {
     const persona = input?.persona === 'stable_salaried' || input?.persona === 'anomaly_heavy' ? input.persona : 'irregular_income';
@@ -436,11 +509,55 @@ protectedApi.post('/api/fairness', async (c) => {
   const simulationId = input && requiredString(input, 'simulationId');
   if (!input || !simulationId) return validationFailure(repo, c, simulationId ?? 'unknown', principal);
   const existing = await repo.getSimulation(simulationId);
-  if (existing && existing.clerkUserId !== principal) return forbidden();
-  const simulation = existing ?? await repo.ensureSimulation(simulationId, principal, 'app-hero');
+  if (!existing || existing.clerkUserId !== principal) return forbidden();
+  if (!(await receiptsAreValid(repo, simulationId))) return errorResponse('CONFLICT', 'Persisted consent receipt could not be verified.', generateRequestId(), 409);
+  const receipts = await repo.listConsents(simulationId);
+  if (!activePurposeConsent(receipts, 'application_baseline')) return errorResponse('CONSENT_REQUIRED', 'Application-baseline consent is required.', generateRequestId(), 403);
+  const simulation = existing;
   const event = await audit(repo, simulationId, simulation.applicantId, 'fairness', principal, { datasetVersion: 'synthetic-cohort-v1' });
   const report = { schemaVersion: API_SCHEMA_VERSION, reportId: `fair-${crypto.randomUUID()}`, simulationId, datasetVersion: 'synthetic-cohort-v1', modelVersion: 'underwriting-engine-v1', referenceCohort: 'cohort_alpha', cohorts: [{ cohort: 'cohort_alpha', sampleCount: 10, strongOrStableRate: 0.7, outcomeRate: null, selectionRateRatio: 1, adverseImpactRatio: 1, sampleSizeWarning: 'Synthetic demonstration cohort; not a production fairness estimate.' }, { cohort: 'cohort_beta', sampleCount: 10, strongOrStableRate: 0.6, outcomeRate: null, selectionRateRatio: 0.86, adverseImpactRatio: 0.86, sampleSizeWarning: 'Synthetic demonstration cohort; not a production fairness estimate.' }], limitations: ['Synthetic evaluation only.', 'Fairness cohorts are not model inputs.'], generatedAt: new Date().toISOString(), auditEventId: event.eventId };
-  return c.json({ schemaVersion: API_SCHEMA_VERSION, report, generatedAt: report.generatedAt });
+  const diagnostic = evaluateFairness(createSyntheticAuditCohorts());
+  return c.json({ schemaVersion: API_SCHEMA_VERSION, report, diagnostic, generatedAt: report.generatedAt });
+});
+
+async function ownedScoredSimulation(repo: SimulationRepository, simulationId: string, principal: string) {
+  const simulation = await ownedSimulation(repo, simulationId, principal);
+  if (!simulation) return { error: forbidden() } as const;
+  const receipts = await repo.listConsents(simulationId);
+  if (!(await receiptsAreValid(repo, simulationId))) return { error: errorResponse('CONFLICT', 'Persisted consent receipt could not be verified.', generateRequestId(), 409) } as const;
+  if (!activePurposeConsent(receipts, 'application_baseline')) return { error: errorResponse('CONSENT_REQUIRED', 'Application-baseline consent is required.', generateRequestId(), 403) } as const;
+  if (!simulation.latestScore) return { error: errorResponse('CONFLICT', 'A deterministic score is required before explanation.', generateRequestId(), 409) } as const;
+  return { simulation, score: simulation.latestScore } as const;
+}
+
+async function explanationResponse(c: Context<AppBindings>, simulationId: string, question: string) {
+  const repo = repositoryFor(c.env);
+  const principal = c.get('principal')!.clerkUserId;
+  const owned = await ownedScoredSimulation(repo, simulationId, principal);
+  if ('error' in owned) return owned.error;
+  try {
+    const explanation = await explainSimulation(c.env, owned.score, question);
+    const modelStatus = explanation.trace.fallback ? 'model-unavailable-fallback' : 'completed-non-streaming';
+    return c.json({ schemaVersion: API_SCHEMA_VERSION, simulationId, explanation, citationIds: explanation.citationIds, modelStatus, streaming: false, generatedAt: new Date().toISOString() });
+  } catch (error) {
+    return errorResponse('VALIDATION_ERROR', error instanceof Error ? error.message : 'Explanation request was not accepted.', generateRequestId(), 400);
+  }
+}
+
+protectedApi.post('/api/explanation', async (c) => {
+  const input = await body(c);
+  const question = input && requiredString(input, 'question');
+  const simulationId = input && requiredString(input, 'simulationId');
+  if (!input || !question || !simulationId) return validationFailure(repositoryFor(c.env), c, simulationId ?? 'unknown', c.get('principal')!.clerkUserId);
+  return explanationResponse(c, simulationId, question);
+});
+
+protectedApi.post('/api/agent-chat', async (c) => {
+  const input = await body(c);
+  const prompt = input && requiredString(input, 'prompt');
+  const simulationId = input && requiredString(input, 'simulationId');
+  if (!input || !prompt || !simulationId) return validationFailure(repositoryFor(c.env), c, simulationId ?? 'unknown', c.get('principal')!.clerkUserId);
+  return explanationResponse(c, simulationId, prompt);
 });
 
 protectedApi.get('/api/audit/:simulationId', async (c) => {
@@ -448,6 +565,7 @@ protectedApi.get('/api/audit/:simulationId', async (c) => {
   const principal = c.get('principal')!.clerkUserId;
   const simulation = await ownedSimulation(repo, c.req.param('simulationId'), principal);
   if (!simulation) return forbidden();
+  if (!(await receiptsAreValid(repo, simulation.simulationId))) return errorResponse('CONFLICT', 'Persisted consent receipt could not be verified.', generateRequestId(), 409);
   return c.json({ schemaVersion: API_SCHEMA_VERSION, simulationId: simulation.simulationId, events: await repo.listAudit(simulation.simulationId), generatedAt: new Date().toISOString() });
 });
 

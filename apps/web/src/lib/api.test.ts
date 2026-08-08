@@ -110,4 +110,37 @@ describe('createApiClient', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it('exposes application, provider, explanation, and agent-chat transports', async () => {
+    const calls: string[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return new Response(JSON.stringify({ ok: true, applications: [], providers: [], explanation: {}, events: [] }), { status: 200 });
+    }) as typeof globalThis.fetch;
+
+    try {
+      const client = createApiClient({ getToken: async () => TOKEN });
+      await client.getApplications();
+      await client.createApplication({ simulationId: 'sim-1', applicantId: 'app-hero', application: { bureauScore: 700, monthlyIncome: 90000, monthlyObligations: 20000, requestedAmount: 100000, loanTenureMonths: 12 } });
+      await client.getApplication('sim-1');
+      await client.getConsents('sim-1');
+      await client.getProviders('sim-1');
+      await client.connectProvider('sim-1', 'account_aggregator', 'con-1');
+      await client.getExplanation('sim-1', 'Why did the score change?');
+      await client.getAgentChat('sim-1', 'Why did the score change?');
+      expect(calls).toEqual([
+        'http://localhost:8787/api/applications',
+        'http://localhost:8787/api/applications',
+        'http://localhost:8787/api/applications/sim-1',
+        'http://localhost:8787/api/consent?simulationId=sim-1',
+        'http://localhost:8787/api/providers?simulationId=sim-1',
+        'http://localhost:8787/api/providers/account_aggregator/connect',
+        'http://localhost:8787/api/explanation',
+        'http://localhost:8787/api/agent-chat',
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

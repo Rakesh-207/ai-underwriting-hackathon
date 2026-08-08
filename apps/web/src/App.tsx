@@ -27,6 +27,11 @@ function PublicLanding() {
   return <Landing />;
 }
 
+function AuthenticatedWorkspace() {
+  const { getToken } = useAuth();
+  return <ApplicationsProvider getToken={getToken}><AppShell /></ApplicationsProvider>;
+}
+
 export function App() {
   return (
     <Routes>
@@ -40,9 +45,7 @@ export function App() {
         path="/app"
         element={
           <ProtectedRoute>
-            <ApplicationsProvider>
-              <AppShell />
-            </ApplicationsProvider>
+            <AuthenticatedWorkspace />
           </ProtectedRoute>
         }
       >

@@ -51,6 +51,46 @@ export interface BehaviorInput {
   value: number;
 }
 
+export type ApiProviderSource = 'account_aggregator' | 'digilocker_employment' | 'digilocker_education';
+
+export interface ApplicationInput {
+  simulationId: string;
+  applicantId: string;
+  application: {
+    bureauScore: number;
+    monthlyIncome: number;
+    monthlyObligations: number;
+    requestedAmount: number;
+    loanTenureMonths: number;
+  };
+  declaredEmployment?: { employer: string };
+}
+
+export interface ApiApplication {
+  simulationId: string;
+  clerkUserId: string;
+  applicantId: string;
+  application: ApplicationInput['application'];
+  declaredEmployment?: { employer: string };
+  behaviorUpdates: BehaviorUpdate[];
+  latestScore: ScoreResult | null;
+  providers: Partial<Record<ApiProviderSource, { data: unknown; provenance: { source: string; provider: string; reference: string; retrievedAt: string }; consent: { consentReference: string } }>>;
+}
+
+export interface ExplanationResponse {
+  simulationId: string;
+  explanation: {
+    score: number;
+    riskBand: string;
+    reasons: Array<{ evidenceId: string; text: string }>;
+    citationIds: string[];
+    trace: { model: string; latencyMs: number; fallback: boolean; usedEvidenceIds: string[] };
+  };
+  citationIds: string[];
+  modelStatus: 'model-unavailable-fallback' | 'completed-non-streaming';
+  streaming: false;
+}
+
 export class ApiError extends Error {
   readonly status: number;
   readonly envelope: ErrorEnvelope | null;
@@ -112,6 +152,36 @@ export function createApiClient(opts: ApiClientOptions) {
       return jsonRequest<ApplicantsResponse>('/api/demo/applicants');
     },
 
+    async getApplications(): Promise<{ applications: ApiApplication[] }> {
+      return jsonRequest<{ applications: ApiApplication[] }>('/api/applications');
+    },
+
+    async createApplication(input: ApplicationInput): Promise<{ application: ApiApplication }> {
+      return jsonRequest<{ application: ApiApplication }>('/api/applications', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
+    },
+
+    async getApplication(simulationId: string): Promise<{ application: ApiApplication }> {
+      return jsonRequest<{ application: ApiApplication }>(`/api/applications/${simulationId}`);
+    },
+
+    async getConsents(simulationId: string): Promise<{ receipts: ConsentResponse['receipt'][] }> {
+      return jsonRequest<{ receipts: ConsentResponse['receipt'][] }>(`/api/consent?simulationId=${encodeURIComponent(simulationId)}`);
+    },
+
+    async getProviders(simulationId: string): Promise<{ providers: Array<{ source: ApiProviderSource; connected: boolean; provenance: unknown }> }> {
+      return jsonRequest<{ providers: Array<{ source: ApiProviderSource; connected: boolean; provenance: unknown }> }>(`/api/providers?simulationId=${encodeURIComponent(simulationId)}`);
+    },
+
+    async connectProvider(simulationId: string, source: ApiProviderSource, consentId: string): Promise<{ provenance: unknown }> {
+      return jsonRequest<{ provenance: unknown }>(`/api/providers/${source}/connect`, {
+        method: 'POST',
+        body: JSON.stringify({ simulationId, consentId }),
+      });
+    },
+
     async createConsent(input: ConsentInput): Promise<ConsentResponse> {
       return jsonRequest<ConsentResponse>('/api/consent', {
         method: 'POST',
@@ -146,6 +216,20 @@ export function createApiClient(opts: ApiClientOptions) {
 
     async getAudit(simulationId: string): Promise<{ events: AuditEvent[] }> {
       return jsonRequest<{ events: AuditEvent[] }>(`/api/audit/${simulationId}`);
+    },
+
+    async getExplanation(simulationId: string, question: string): Promise<ExplanationResponse> {
+      return jsonRequest<ExplanationResponse>('/api/explanation', {
+        method: 'POST',
+        body: JSON.stringify({ simulationId, question }),
+      });
+    },
+
+    async getAgentChat(simulationId: string, prompt: string): Promise<ExplanationResponse> {
+      return jsonRequest<ExplanationResponse>('/api/agent-chat', {
+        method: 'POST',
+        body: JSON.stringify({ simulationId, prompt }),
+      });
     },
 
     // Generic protected request helper.

@@ -231,6 +231,12 @@ describe('API simulation routes', () => {
   });
 
   it('evaluates fairness and returns the owned audit trail', async () => {
+    const consent = await request('/api/consent', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-fair', applicantId: 'app-hero', purposes: ['application_baseline'], categories: ['application_baseline'], source: 'synthetic_fixture' }),
+    });
+    expect(consent.status).toBe(201);
     const fairness = await request('/api/fairness', {
       method: 'POST',
       headers: { ...auth, 'content-type': 'application/json' },
@@ -283,5 +289,86 @@ describe('API simulation routes', () => {
       body: JSON.stringify({ simulationId: 'sim-cross-user', applicantId: 'app-hero', mode: 'baseline_only' }),
     });
     expect(denied.status).toBe(403);
+  });
+
+  it('returns a deterministic grounded explanation when the VPS is unavailable', async () => {
+    const created = await request('/api/applications', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-explanation', applicantId: 'app-hero' }),
+    });
+    expect(created.status).toBe(201);
+    const consent = await request('/api/consent', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-explanation', applicantId: 'app-hero', purposes: ['application_baseline'], categories: ['application_baseline'], source: 'synthetic_fixture' }),
+    });
+    expect(consent.status).toBe(201);
+    const score = await request('/api/score', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-explanation', applicantId: 'app-hero', mode: 'baseline_only' }),
+    });
+    expect(score.status).toBe(200);
+
+    const explanation = await request('/api/explanation', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-explanation', question: 'Why did the score change?' }),
+    });
+    expect(explanation.status).toBe(200);
+    const explanationBody = await json<{ explanation: { trace: { fallback: boolean }; reasons: Array<{ evidenceId: string }> }; modelStatus: string; streaming: boolean; citationIds: string[] }>(explanation);
+    expect(explanationBody.explanation.trace.fallback).toBe(true);
+    expect(explanationBody.modelStatus).toBe('model-unavailable-fallback');
+    expect(explanationBody.streaming).toBe(false);
+    expect(explanationBody.explanation.reasons.length).toBeGreaterThan(0);
+    expect(explanationBody.citationIds.length).toBeGreaterThan(0);
+  });
+
+  it('rejects applicant data in agent chat before any model request', async () => {
+    const created = await request('/api/applications', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-agent-sanitize', applicantId: 'app-hero' }),
+    });
+    expect(created.status).toBe(201);
+    const consent = await request('/api/consent', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-agent-sanitize', applicantId: 'app-hero', purposes: ['application_baseline'], categories: ['application_baseline'], source: 'synthetic_fixture' }),
+    });
+    expect(consent.status).toBe(201);
+    const score = await request('/api/score', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-agent-sanitize', applicantId: 'app-hero', mode: 'baseline_only' }),
+    });
+    expect(score.status).toBe(200);
+    const response = await request('/api/agent-chat', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-agent-sanitize', prompt: 'Tell me the applicant email and account number.' }),
+    });
+    expect(response.status).toBe(400);
+    expect((await json<{ errorCode: string }>(response)).errorCode).toBe('VALIDATION_ERROR');
+  });
+
+  it('uses the completed fairness evaluation package for diagnostics', async () => {
+    const consent = await request('/api/consent', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-fair-package', applicantId: 'app-hero', purposes: ['application_baseline'], categories: ['application_baseline'], source: 'synthetic_fixture' }),
+    });
+    expect(consent.status).toBe(201);
+    const response = await request('/api/fairness', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-fair-package' }),
+    });
+    expect(response.status).toBe(200);
+    const body = await json<{ diagnostic: { status: string; groupMetrics: unknown[]; checks: unknown[] } }>(response);
+    expect(body.diagnostic.status).toBe('warn');
+    expect(body.diagnostic.groupMetrics.length).toBe(3);
+    expect(body.diagnostic.checks.length).toBe(4);
   });
 });
