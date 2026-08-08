@@ -19,6 +19,13 @@ CREATE TABLE IF NOT EXISTS consent_receipts (
 
 CREATE INDEX IF NOT EXISTS consent_owner_idx ON consent_receipts (clerk_user_id, simulation_id);
 
+CREATE TABLE IF NOT EXISTS provider_snapshots (
+  simulation_id TEXT NOT NULL,
+  source TEXT NOT NULL,
+  provider_json TEXT NOT NULL,
+  PRIMARY KEY (simulation_id, source)
+);
+
 CREATE TABLE IF NOT EXISTS score_snapshots (
   score_id TEXT PRIMARY KEY,
   simulation_id TEXT NOT NULL,

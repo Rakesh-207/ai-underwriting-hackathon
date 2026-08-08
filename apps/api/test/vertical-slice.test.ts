@@ -177,7 +177,31 @@ describe('API and storage vertical slice', () => {
       },
     } as unknown as D1Database;
     const repository = new D1SimulationRepository(db);
-    repository.ensureSimulation('d1-sim', 'user-1', 'app-review');
+    await repository.ensureSimulation('d1-sim', 'user-1', 'app-review');
     expect(calls.some((query) => query.includes('INSERT INTO applications'))).toBe(true);
+  });
+
+  it('does not allow an unrelated alternative consent to connect DigiLocker employment', async () => {
+    const consent = await grant('exact-provider-consent', ['application_baseline', 'alternative_cashflow']);
+    const response = await request('/api/providers/digilocker_employment/connect', {
+      method: 'POST',
+      headers: { ...auth(), 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'exact-provider-consent', consentId: consent.receipt.consentId }),
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it('propagates D1 write failures instead of silently using memory', async () => {
+    const db = {
+      prepare() {
+        return { bind: () => ({ run: async () => { throw new Error('d1 unavailable'); }, first: async () => null, all: async () => ({ results: [] }) }) };
+      },
+    } as unknown as D1Database;
+    const d1Repository = new D1SimulationRepository(db);
+    await expect(d1Repository.saveConsent({
+      schemaVersion: '1.1', consentId: 'd1-consent', simulationId: 'd1-failure', applicantId: 'app-review',
+      purposes: ['application_baseline'], categories: ['bureau'], source: 'synthetic_fixture', status: 'granted',
+      grantedAt: '2026-08-08T00:00:00.000Z', revokedAt: null, retention: 'demo_session', receiptHash: 'sha256:invalid', identityProvider: 'clerk', clerkUserId: 'user-1',
+    })).rejects.toThrow('d1 unavailable');
   });
 });
