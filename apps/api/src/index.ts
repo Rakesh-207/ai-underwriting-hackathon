@@ -255,11 +255,25 @@ function ragProvider(env: AppBindings['Bindings']): RagProvider {
 }
 
 async function approvedRagChunks(env: AppBindings['Bindings'], score: ScoreResult, question: string): Promise<RagChunk[]> {
-  const query = createSanitizedQuery({
+  createSanitizedQuery({
     featureKeys: score.evidence.map((item) => item.featureKey),
     anomalyTypes: score.fraudReview.flags.map((item) => item.ruleKey),
     behaviorChangeCategories: ['behavior_updates'],
     explanationQuestion: question,
+    allowedCorpusTopics: ['scoring', 'anomaly', 'limitations', 'consent', 'fairness'] satisfies RagTopic[],
+  });
+  const safeQuestion = question.toLowerCase().includes('fairness')
+    ? 'Explain the synthetic fairness diagnostic and its limitations.'
+    : question.toLowerCase().includes('anomal')
+      ? 'Explain anomaly diagnostics and review limitations.'
+      : question.toLowerCase().includes('consent')
+        ? 'Explain purpose-bound consent and provenance limitations.'
+        : 'Explain deterministic score evidence and limitations.';
+  const query = createSanitizedQuery({
+    featureKeys: score.evidence.map((item) => item.featureKey),
+    anomalyTypes: score.fraudReview.flags.map((item) => item.ruleKey),
+    behaviorChangeCategories: ['behavior_updates'],
+    explanationQuestion: safeQuestion,
     allowedCorpusTopics: ['scoring', 'anomaly', 'limitations', 'consent', 'fairness'] satisfies RagTopic[],
   });
   const local = new LocalRagProvider(CURATED_CORPUS);
@@ -306,6 +320,9 @@ protectedApi.get('/api/applications', async (c) => {
   const repo = repositoryFor(c.env);
   const principal = c.get('principal')!.clerkUserId;
   const applications = (await repo.listSimulations()).filter((item) => item.clerkUserId === principal);
+  for (const application of applications) {
+    if (!(await receiptsAreValid(repo, application.simulationId))) return errorResponse('CONFLICT', 'Persisted consent receipt could not be verified.', generateRequestId(), 409);
+  }
   return c.json({ schemaVersion: API_SCHEMA_VERSION, applications, generatedAt: new Date().toISOString() });
 });
 
@@ -319,6 +336,7 @@ protectedApi.post('/api/applications', async (c) => {
   if (!input || !simulationId || !applicantId || !applicant) return validationFailure(repo, c, simulationId ?? 'unknown', principal);
   const existing = await repo.getSimulation(simulationId);
   if (existing && (existing.clerkUserId !== principal || existing.applicantId !== applicantId)) return forbidden();
+  if (existing && !(await receiptsAreValid(repo, simulationId))) return errorResponse('CONFLICT', 'Persisted consent receipt could not be verified.', generateRequestId(), 409);
   const simulation = await repo.ensureSimulation(simulationId, principal, applicantId);
   const applicationInput = isObject(input.application) ? input.application : {};
   const application = {

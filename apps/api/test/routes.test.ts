@@ -6,6 +6,7 @@ vi.mock('@clerk/backend', () => ({
 
 import app from '../src/index.ts';
 import type { Env } from '../src/env.ts';
+import { repository } from '../src/repository.ts';
 
 const env: Env = { CLERK_SECRET_KEY: 'test-placeholder', CLERK_AUTHORIZED_PARTIES: 'https://app.example.com,http://localhost:5173' };
 const auth = { authorization: 'Bearer valid-test-token' };
@@ -370,5 +371,57 @@ describe('API simulation routes', () => {
     expect(body.diagnostic.status).toBe('warn');
     expect(body.diagnostic.groupMetrics.length).toBe(3);
     expect(body.diagnostic.checks.length).toBe(4);
+  });
+
+  it('rejects application list and mutation when an owned receipt is tampered', async () => {
+    const created = await request('/api/consent', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-application-hash', applicantId: 'app-hero', purposes: ['application_baseline'], categories: ['application_baseline'], source: 'synthetic_fixture' }),
+    });
+    expect(created.status).toBe(201);
+    const receipt = await json<{ receipt: { consentId: string } }>(created);
+    const persisted = repository.getConsent(receipt.receipt.consentId)!;
+    repository.saveConsent({ ...persisted, categories: ['tampered'] });
+    const listed = await request('/api/applications', { headers: auth });
+    expect(listed.status).toBe(409);
+    const updated = await request('/api/applications', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-application-hash', applicantId: 'app-hero' }),
+    });
+    expect(updated.status).toBe(409);
+  });
+
+  it('does not forward the raw agent prompt to Cloudflare AI Search', async () => {
+    let capturedQuery = '';
+    const aiSearch = {
+      get: () => ({
+        search: async (input: { messages: Array<{ content: string }> }) => {
+          capturedQuery = input.messages[0].content;
+          return { chunks: [] };
+        },
+      }),
+    } as never;
+    const configuredEnv = { ...env, AI_SEARCH: aiSearch };
+    const create = await request('/api/consent', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-rag-redaction', applicantId: 'app-hero', purposes: ['application_baseline'], categories: ['application_baseline'], source: 'synthetic_fixture' }),
+    });
+    expect(create.status).toBe(201);
+    const score = await request('/api/score', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-rag-redaction', applicantId: 'app-hero', mode: 'baseline_only' }),
+    });
+    expect(score.status).toBe(200);
+    const response = await app.fetch(new Request('http://localhost/api/explanation', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-rag-redaction', question: 'Explain this score for Alice.' }),
+    }), configuredEnv);
+    expect(response.status).toBe(200);
+    expect(capturedQuery).not.toContain('Alice');
   });
 });
