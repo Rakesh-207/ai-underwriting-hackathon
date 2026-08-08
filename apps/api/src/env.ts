@@ -4,6 +4,7 @@
 // See auth contract 1.3: "must never appear in any VITE_* variable, the client
 // bundle, logs, source maps, error payloads, fixture data, or source-owned UI."
 export interface Env {
+  DB?: D1Database;
   CLERK_SECRET_KEY: string;
   CLERK_JWT_KEY?: string;
   CLERK_PUBLISHABLE_KEY?: string;

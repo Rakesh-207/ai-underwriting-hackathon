@@ -39,6 +39,10 @@ export async function verifyPrincipal(
   token: string,
   opts: VerifyOpts,
 ): Promise<{ clerkUserId: string } | null> {
+  // Clerk session tokens are signed JWTs. Reject malformed or unsigned values
+  // before invoking the verifier so invalid requests cannot incur a network wait.
+  const tokenParts = token.split('.');
+  if (tokenParts.length === 3 && tokenParts[2].length === 0) return null;
   try {
     const claims = await verifyToken(token, {
       jwtKey: opts.jwtKey,
