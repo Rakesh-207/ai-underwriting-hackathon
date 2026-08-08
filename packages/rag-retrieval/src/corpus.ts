@@ -1,0 +1,68 @@
+import type { CorpusChunk } from './types';
+
+export const CURATED_CORPUS: readonly CorpusChunk[] = [
+  {
+    chunkId: 'consent-purpose-v1',
+    title: 'Consent and purpose limitation',
+    sourceUrl: 'https://www.consumerfinance.gov/rules-policy/regulations/1002/6/',
+    topic: 'consent',
+    version: 'v1',
+    text: 'Consent must be specific to the stated purpose and scope. Optional alternative signals may be used only after the corresponding consent is active. Refusing an optional source must not silently change baseline inputs or create a separate penalty.',
+  },
+  {
+    chunkId: 'feature-definitions-v1',
+    title: 'Alternative-data feature definitions',
+    sourceUrl: 'https://docs.example.invalid/underwriting/features',
+    topic: 'scoring',
+    version: 'v1',
+    text: 'Cash-flow stability describes bounded variation in observed credit activity. Income consistency describes the presence of recurring income-like observations within a statement period. These definitions are descriptive feature documentation, not applicant facts.',
+  },
+  {
+    chunkId: 'anomaly-definitions-v1',
+    title: 'Anomaly and fraud definitions',
+    sourceUrl: 'https://docs.example.invalid/underwriting/anomalies',
+    topic: 'anomaly',
+    version: 'v1',
+    text: 'Anomaly diagnostics include duplicate transaction fingerprints, unusual transaction spikes, unexplained balance jumps, inconsistent income patterns, contradictory dates, and employment declaration mismatches. A diagnostic flag identifies a condition for review; it does not determine an individual outcome.',
+  },
+  {
+    chunkId: 'fairness-methodology-v1',
+    title: 'Fairness evaluation methodology',
+    sourceUrl: 'https://www.consumerfinance.gov/compliance/compliance-resources/other-applicable-requirements/equal-credit-opportunity-act/',
+    topic: 'fairness',
+    version: 'v1',
+    text: 'Fairness evaluation compares synthetic audit cohorts while keeping audit labels outside scoring inputs. Report group means, medians, risk-band distributions, diagnostic threshold rates, score gaps, sample sizes, and limitations. Small samples require an explicit warning.',
+  },
+  {
+    chunkId: 'explanation-rules-v1',
+    title: 'Explanation rules',
+    sourceUrl: 'https://docs.example.invalid/underwriting/explanations',
+    topic: 'scoring',
+    version: 'v1',
+    text: 'Explanations should cite the retrieved chunk identifier, title, source URL, topic, and version. Explain documented feature definitions and engine evidence without inventing facts, inferring protected traits, or revealing private applicant data.',
+  },
+  {
+    chunkId: 'limitations-v1',
+    title: 'Evaluation limitations',
+    sourceUrl: 'https://www.eeoc.gov/laws/guidance/cm-604-theories-discrimination',
+    topic: 'limitations',
+    version: 'v1',
+    text: 'Synthetic retrieval and synthetic evaluation cannot establish real-world validity, causality, statistical power, or compliance. A four-fifths comparison is only an illustrative screening diagnostic and is not a legal guarantee.',
+  },
+  {
+    chunkId: 'architecture-cost-v1',
+    title: 'Retrieval architecture and cost notes',
+    sourceUrl: 'https://developers.cloudflare.com/ai-search/how-to/chunk-citations',
+    topic: 'architecture',
+    version: 'v1',
+    text: 'Cloudflare AI Search is the production retrieval provider. The Worker retrieves chunks from the underwriting-knowledge instance and passes cited context to a private VPS LFM service. AI Search retrieval is not used to generate explanations. Built-in storage is the MVP corpus path; R2 is a future corpus-ingestion option.',
+  },
+  {
+    chunkId: 'cost-notes-v1',
+    title: 'Cost and operational notes',
+    sourceUrl: 'https://developers.cloudflare.com/ai-search/',
+    topic: 'cost',
+    version: 'v1',
+    text: 'Keep the MVP corpus small and curated. Measure retrieval volume and returned chunk counts. Do not hide provider errors or assume that a remote retrieval is free. Cost and retention decisions belong in platform operations documentation.',
+  },
+];
