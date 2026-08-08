@@ -336,8 +336,11 @@ protectedApi.post('/api/applications', async (c) => {
   if (!input || !simulationId || !applicantId || !applicant) return validationFailure(repo, c, simulationId ?? 'unknown', principal);
   const existing = await repo.getSimulation(simulationId);
   if (existing && (existing.clerkUserId !== principal || existing.applicantId !== applicantId)) return forbidden();
-  if (existing && !(await receiptsAreValid(repo, simulationId))) return errorResponse('CONFLICT', 'Persisted consent receipt could not be verified.', generateRequestId(), 409);
-  const simulation = await repo.ensureSimulation(simulationId, principal, applicantId);
+  if (!existing) return errorResponse('CONSENT_REQUIRED', 'Application-baseline consent is required before application data is stored.', generateRequestId(), 403);
+  if (!(await receiptsAreValid(repo, simulationId))) return errorResponse('CONFLICT', 'Persisted consent receipt could not be verified.', generateRequestId(), 409);
+  const receipts = await repo.listConsents(simulationId);
+  if (!activePurposeConsent(receipts, 'application_baseline')) return errorResponse('CONSENT_REQUIRED', 'Application-baseline consent is required before application data is stored.', generateRequestId(), 403);
+  const simulation = existing;
   const applicationInput = isObject(input.application) ? input.application : {};
   const application = {
     bureauScore: typeof applicationInput.bureauScore === 'number' ? applicationInput.bureauScore : simulation.application.bureauScore,

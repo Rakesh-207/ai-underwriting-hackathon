@@ -127,10 +127,10 @@ export function ApplicationsProvider({ children, getToken }: { children: ReactNo
   };
 
   const runReview = async (draft: ApplicationDraft, id?: string) => {
-    const saved = await saveDraft(draft, id);
-    const simulationId = saved.id;
-    const applicantId = saved.apiApplication?.applicantId ?? 'app-hero';
+    const simulationId = id ?? `sim-${crypto.randomUUID()}`;
+    const applicantId = 'app-hero';
     await api.createConsent({ simulationId, applicantId, purposes: ['application_baseline'], categories: ['application_baseline'], source: 'synthetic_fixture' });
+    const saved = await saveDraft(draft, simulationId);
     const connectedSources = (Object.entries(draft.sources) as Array<[DataSourceKey, { state: string }]>).filter(([, source]) => source.state === 'Connected');
     for (const [source] of connectedSources) {
       const apiSource = sourceToApi(source);

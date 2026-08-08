@@ -42,6 +42,7 @@ describe('API and storage vertical slice', () => {
   });
 
   it('creates and retrieves an owned application without accepting a body user id', async () => {
+    await grant('application-owned', ['application_baseline']);
     const created = await request('/api/applications', {
       method: 'POST',
       headers: { ...auth(), 'content-type': 'application/json' },
@@ -57,6 +58,15 @@ describe('API and storage vertical slice', () => {
 
     const crossUser = await request('/api/applications/application-owned', { headers: auth('user-2') });
     expect(crossUser.status).toBe(403);
+  });
+
+  it('requires baseline consent before persisting application data', async () => {
+    const response = await request('/api/applications', {
+      method: 'POST',
+      headers: { ...auth(), 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'application-without-consent', applicantId: 'app-review', application: { bureauScore: 700 } }),
+    });
+    expect(response.status).toBe(403);
   });
 
   it('lists consent receipts and exposes provider status only after exact consent', async () => {

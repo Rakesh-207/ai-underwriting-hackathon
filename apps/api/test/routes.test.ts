@@ -293,18 +293,18 @@ describe('API simulation routes', () => {
   });
 
   it('returns a deterministic grounded explanation when the VPS is unavailable', async () => {
-    const created = await request('/api/applications', {
-      method: 'POST',
-      headers: { ...auth, 'content-type': 'application/json' },
-      body: JSON.stringify({ simulationId: 'sim-explanation', applicantId: 'app-hero' }),
-    });
-    expect(created.status).toBe(201);
     const consent = await request('/api/consent', {
       method: 'POST',
       headers: { ...auth, 'content-type': 'application/json' },
       body: JSON.stringify({ simulationId: 'sim-explanation', applicantId: 'app-hero', purposes: ['application_baseline'], categories: ['application_baseline'], source: 'synthetic_fixture' }),
     });
     expect(consent.status).toBe(201);
+    const created = await request('/api/applications', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-explanation', applicantId: 'app-hero' }),
+    });
+    expect(created.status).toBe(201);
     const score = await request('/api/score', {
       method: 'POST',
       headers: { ...auth, 'content-type': 'application/json' },
@@ -327,18 +327,18 @@ describe('API simulation routes', () => {
   });
 
   it('rejects applicant data in agent chat before any model request', async () => {
-    const created = await request('/api/applications', {
-      method: 'POST',
-      headers: { ...auth, 'content-type': 'application/json' },
-      body: JSON.stringify({ simulationId: 'sim-agent-sanitize', applicantId: 'app-hero' }),
-    });
-    expect(created.status).toBe(201);
     const consent = await request('/api/consent', {
       method: 'POST',
       headers: { ...auth, 'content-type': 'application/json' },
       body: JSON.stringify({ simulationId: 'sim-agent-sanitize', applicantId: 'app-hero', purposes: ['application_baseline'], categories: ['application_baseline'], source: 'synthetic_fixture' }),
     });
     expect(consent.status).toBe(201);
+    const created = await request('/api/applications', {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ simulationId: 'sim-agent-sanitize', applicantId: 'app-hero' }),
+    });
+    expect(created.status).toBe(201);
     const score = await request('/api/score', {
       method: 'POST',
       headers: { ...auth, 'content-type': 'application/json' },
