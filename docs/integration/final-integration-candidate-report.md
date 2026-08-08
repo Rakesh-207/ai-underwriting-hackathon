@@ -4,7 +4,7 @@
 
 - Branch: `codex/final-integration-candidate`
 - Base: `main@67c110d` (`67c110d3fec6eb5c1b76d5d22173c4d195669759`)
-- Current commit: `2ae460e fix(integration): harden app integrity and rag queries`
+- Current commit: `HEAD` at final audit time; resolve with `git rev-parse HEAD` (the final report commit is the tip).
 - Merge status: not merged into `main`
 - Deployment status: not deployed
 - Audit status: GO after the final independent audit of the clean candidate
@@ -102,7 +102,7 @@ No deployment or Cloudflare resource creation was performed.
 
 ## Verification
 
-- `npm test`: passed, 66 API tests, 32 web tests, and all integrated package tests.
+- `npm test`: passed, 67 API tests, 32 web tests, and all integrated package tests.
 - `npm run typecheck`: passed across all workspaces.
 - `npm run lint`: passed.
 - `npm run build`: passed. Wrangler ran only with `--dry-run`; no bindings were found and no deployment occurred.
