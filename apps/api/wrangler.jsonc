@@ -1,6 +1,25 @@
 {
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "underwriting-simulation-api",
   "main": "src/index.ts",
   "compatibility_date": "2024-12-01",
-  "compatibility_flags": ["nodejs_compat"]
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "AI_SEARCH_INSTANCE": "underwriting-knowledge"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "underwriting-simulation-production",
+      "database_id": "abbca2a5-eca5-4cff-ad14-074be376e795",
+      "migrations_dir": "../../migrations"
+    }
+  ],
+  "ai_search_namespaces": [
+    {
+      "binding": "AI_SEARCH",
+      "namespace": "default",
+      "remote": true
+    }
+  ]
 }
