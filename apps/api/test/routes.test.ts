@@ -8,7 +8,7 @@ import app from '../src/index.ts';
 import type { Env } from '../src/env.ts';
 import { repository } from '../src/repository.ts';
 
-const env: Env = { CLERK_SECRET_KEY: 'test-placeholder', CLERK_AUTHORIZED_PARTIES: 'https://app.example.com,http://localhost:5173' };
+const env: Env = { CLERK_SECRET_KEY: 'test-placeholder', CLERK_AUTHORIZED_PARTIES: 'https://app.example.com,http://localhost:5173', ALLOWED_ORIGINS: 'https://e37e8986.underwriting-hackathon.pages.dev,https://d2aeb87e.underwriting-hackathon.pages.dev' };
 const auth = { authorization: 'Bearer valid-test-token' };
 
 async function request(path: string, init: RequestInit = {}) {
@@ -45,6 +45,13 @@ describe('API simulation routes', () => {
     expect(applicants.status).toBe(200);
     const body = await json<{ applicants: Array<{ applicantId: string }> }>(applicants);
     expect(body.applicants.some((item) => item.applicantId === 'app-review')).toBe(true);
+  });
+
+  it('returns CORS headers on a valid authenticated response', async () => {
+    const origin = 'https://d2aeb87e.underwriting-hackathon.pages.dev';
+    const response = await request('/api/applications', { headers: { ...auth, origin } });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('access-control-allow-origin')).toBe(origin);
   });
 
   it('creates and revokes an owned consent receipt', async () => {

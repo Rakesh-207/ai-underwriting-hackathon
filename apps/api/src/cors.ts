@@ -22,19 +22,21 @@ export const cors = (): MiddlewareHandler<AppBindings> => {
       .map((s) => s.trim())
       .filter(Boolean);
 
-    if (origin && originAllowed(origin, allowed)) {
-      c.header('access-control-allow-origin', origin);
-      c.header('access-control-allow-headers', ALLOWED_HEADERS.join(', '));
-      c.header('access-control-allow-methods', 'GET, POST, OPTIONS');
-      c.header('vary', 'origin');
-    }
+    const allowedOrigin = origin && originAllowed(origin, allowed) ? origin : null;
+    const applyCorsHeaders = (headers: Headers) => {
+      if (!allowedOrigin) return;
+      headers.set('access-control-allow-origin', allowedOrigin);
+      headers.set('access-control-allow-headers', ALLOWED_HEADERS.join(', '));
+      headers.set('access-control-allow-methods', 'GET, POST, OPTIONS');
+      headers.set('vary', 'origin');
+    };
 
     if (c.req.method === 'OPTIONS') {
       // Preflight is never an authorized API request. Return the CORS headers
       // directly on the 204 response.
       const preflightHeaders: Record<string, string> = { vary: 'origin' };
-      if (origin && originAllowed(origin, allowed)) {
-        preflightHeaders['access-control-allow-origin'] = origin;
+      if (allowedOrigin) {
+        preflightHeaders['access-control-allow-origin'] = allowedOrigin;
         preflightHeaders['access-control-allow-headers'] =
           ALLOWED_HEADERS.join(', ');
         preflightHeaders['access-control-allow-methods'] = 'GET, POST, OPTIONS';
@@ -42,5 +44,13 @@ export const cors = (): MiddlewareHandler<AppBindings> => {
       return new Response(null, { status: 204, headers: preflightHeaders });
     }
     await next();
+    const response = c.res;
+    const headers = new Headers(response.headers);
+    applyCorsHeaders(headers);
+    c.res = new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
   };
 };

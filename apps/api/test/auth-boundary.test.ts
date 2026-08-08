@@ -7,6 +7,7 @@ import type { Env } from '../src/env.ts';
 const testEnv: Env = {
   CLERK_SECRET_KEY: 'test-secret-placeholder-not-a-real-key',
   CLERK_AUTHORIZED_PARTIES: 'http://localhost:5173',
+  ALLOWED_ORIGINS: 'http://localhost:5173,https://e37e8986.underwriting-hackathon.pages.dev,https://d2aeb87e.underwriting-hackathon.pages.dev',
 };
 
 function request(path: string, init: RequestInit = {}): Response {
@@ -153,6 +154,51 @@ describe('CORS preflight', () => {
     const allowedHeaders = res.headers.get('access-control-allow-headers');
     expect(allowedHeaders).toContain('authorization');
     expect(allowedHeaders).toContain('content-type');
+  });
+
+  it.each([
+    'https://e37e8986.underwriting-hackathon.pages.dev',
+    'https://d2aeb87e.underwriting-hackathon.pages.dev',
+  ])('allows the deployment origin %s on preflight', async (origin) => {
+    const res = await request('/api/score', {
+      method: 'OPTIONS',
+      headers: { origin, 'access-control-request-method': 'POST', 'access-control-request-headers': 'authorization, content-type' },
+    });
+    expect(res.status).toBe(204);
+    expect(res.headers.get('access-control-allow-origin')).toBe(origin);
+    expect(res.headers.get('access-control-allow-methods')).toContain('POST');
+    expect(res.headers.get('vary')).toContain('origin');
+  });
+
+  it('does not allow a disallowed origin on preflight', async () => {
+    const res = await request('/api/score', {
+      method: 'OPTIONS',
+      headers: { origin: 'https://evil.example', 'access-control-request-method': 'POST' },
+    });
+    expect(res.status).toBe(204);
+    expect(res.headers.get('access-control-allow-origin')).toBeNull();
+    expect(res.headers.get('access-control-allow-methods')).toBeNull();
+  });
+
+  it('adds CORS headers to a protected GET missing its token', async () => {
+    const origin = 'https://d2aeb87e.underwriting-hackathon.pages.dev';
+    const res = await request('/api/applications', { headers: { origin } });
+    expect(res.status).toBe(401);
+    expect(res.headers.get('access-control-allow-origin')).toBe(origin);
+  });
+
+  it('adds CORS headers to a protected POST missing its token', async () => {
+    const origin = 'https://e37e8986.underwriting-hackathon.pages.dev';
+    const res = await request('/api/score', { method: 'POST', headers: { origin, 'content-type': 'application/json' } });
+    expect(res.status).toBe(401);
+    expect(res.headers.get('access-control-allow-origin')).toBe(origin);
+  });
+
+  it('adds CORS headers to a valid authenticated response', async () => {
+    const origin = 'https://d2aeb87e.underwriting-hackathon.pages.dev';
+    const res = await request('/api/health', { headers: { origin } });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('access-control-allow-origin')).toBe(origin);
   });
 });
 
